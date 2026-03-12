@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NEBULA • HNS P2P • Chat + Calls + Files</title>
-  <!-- QR Code Library -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEBULA • HNS Messenger • Chat • Calls • Files</title>
+  <!-- peerjs for WebRTC (handles signaling automatically!) -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- QR code for easy sharing -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * {
       margin: 0;
@@ -35,39 +39,48 @@
       background: var(--bg-primary);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: var(--text-primary);
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       justify-content: center;
-      padding: 20px;
+      align-items: center;
+      overflow: hidden;
     }
 
-    .container {
-      max-width: 1400px;
+    .app-container {
       width: 100%;
-      background: var(--bg-secondary);
-      border-radius: 32px;
-      overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      height: 100%;
+      max-width: 1400px;
       display: flex;
-      flex-direction: column;
+      background: var(--bg-secondary);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
     }
 
     /* Login Screen */
     .login-screen {
-      padding: 40px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 600px;
+      z-index: 2000;
+    }
+
+    .login-screen.hidden {
+      display: none;
     }
 
     .login-box {
-      max-width: 400px;
-      width: 100%;
-      background: var(--bg-tertiary);
-      padding: 40px;
+      width: 400px;
+      max-width: 90%;
+      background: var(--bg-secondary);
       border-radius: 32px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     }
 
     .logo {
@@ -77,10 +90,14 @@
 
     .logo h1 {
       font-size: 48px;
-      background: linear-gradient(135deg, #6e5be2, #0088cc);
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
+    }
+
+    .logo p {
+      color: var(--text-muted);
     }
 
     .input-group {
@@ -90,7 +107,7 @@
     .input-field {
       width: 100%;
       padding: 16px;
-      background: var(--bg-primary);
+      background: var(--bg-tertiary);
       border: 1px solid var(--border-color);
       border-radius: 16px;
       color: var(--text-primary);
@@ -124,9 +141,8 @@
     }
 
     .btn-secondary {
-      background: var(--bg-primary);
+      background: var(--bg-tertiary);
       color: var(--text-primary);
-      border: 1px solid var(--border-color);
     }
 
     .btn-secondary:hover {
@@ -136,28 +152,29 @@
     .challenge-area {
       margin-top: 24px;
       padding: 20px;
-      background: var(--bg-primary);
+      background: var(--bg-tertiary);
       border-radius: 16px;
     }
 
     .challenge-text {
       font-family: monospace;
       padding: 16px;
-      background: var(--bg-tertiary);
+      background: var(--bg-primary);
       border-radius: 12px;
       margin: 12px 0;
       word-break: break-all;
+      font-size: 14px;
     }
 
     /* Main App */
-    .app-main {
-      display: none;
-      height: 800px;
-      max-height: 90vh;
+    .main-app {
+      display: flex;
+      width: 100%;
+      height: 100%;
     }
 
-    .app-main.active {
-      display: flex;
+    .main-app.hidden {
+      display: none;
     }
 
     /* Sidebar */
@@ -218,6 +235,25 @@
       height: 10px;
       border-radius: 50%;
       background: var(--online-indicator);
+    }
+
+    .status-dot.offline {
+      background: #9e9e9e;
+    }
+
+    .online-count {
+      padding: 12px 20px;
+      background: var(--bg-tertiary);
+      margin: 8px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .online-count i {
+      color: var(--accent-green);
     }
 
     .search-box {
@@ -469,6 +505,7 @@
       outline: none;
       resize: none;
       max-height: 120px;
+      font-family: inherit;
     }
 
     /* Video Call Overlay */
@@ -536,52 +573,59 @@
       color: white;
       font-size: 20px;
       cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .video-control-btn:hover {
+      transform: scale(1.1);
     }
 
     .video-control-btn.danger {
       background: var(--accent-red);
     }
 
-    /* SDP Exchange Panel */
-    .sdp-panel {
+    /* Add peer panel */
+    .add-peer-panel {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 90%;
-      max-width: 600px;
+      width: 400px;
+      max-width: 90%;
       background: var(--bg-secondary);
       border-radius: 32px;
-      padding: 24px;
-      z-index: 2000;
+      padding: 32px;
+      z-index: 1500;
       display: none;
     }
 
-    .sdp-panel.active {
+    .add-peer-panel.active {
       display: block;
     }
 
-    .sdp-textarea {
-      width: 100%;
-      height: 200px;
-      background: var(--bg-primary);
+    .peer-list-modal {
+      max-height: 300px;
+      overflow-y: auto;
+      margin: 20px 0;
       border: 1px solid var(--border-color);
       border-radius: 16px;
-      color: var(--text-primary);
-      padding: 16px;
-      font-family: monospace;
-      font-size: 12px;
-      margin: 16px 0;
-      resize: vertical;
     }
 
-    .qr-container {
+    .peer-item {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
       display: flex;
-      justify-content: center;
-      padding: 20px;
-      background: white;
-      border-radius: 16px;
-      margin: 16px 0;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .peer-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .peer-item:last-child {
+      border-bottom: none;
     }
 
     .modal-backdrop {
@@ -591,7 +635,7 @@
       right: 0;
       bottom: 0;
       background: rgba(0,0,0,0.5);
-      z-index: 1999;
+      z-index: 1499;
       display: none;
     }
 
@@ -605,7 +649,6 @@
   </style>
 </head>
 <body>
-<div class="container">
   <!-- Login Screen -->
   <div id="loginScreen" class="login-screen">
     <div class="login-box">
@@ -623,10 +666,10 @@
       </button>
       
       <div id="challengeArea" class="challenge-area hidden">
-        <p style="margin-bottom: 8px;">Add this TXT record:</p>
+        <p style="margin-bottom: 8px;">Add this TXT record to your domain:</p>
         <div id="challengeText" class="challenge-text"></div>
         <button id="verifyBtn" class="btn btn-primary" style="margin-top: 12px;">
-          I've added it, verify
+          <i class="fas fa-check"></i> I've Added It
         </button>
       </div>
       
@@ -635,7 +678,7 @@
   </div>
 
   <!-- Main App -->
-  <div id="appMain" class="app-main">
+  <div id="mainApp" class="main-app hidden">
     <!-- Sidebar -->
     <div class="sidebar">
       <div class="sidebar-header">
@@ -644,9 +687,15 @@
         </div>
         <div class="user-info">
           <div class="user-name" id="myName">Loading...</div>
-          <div class="user-domain" id="myDomain">@domain.hns</div>
+          <div class="user-domain" id="myDomain"></div>
         </div>
         <div class="status-dot" id="connectionStatus"></div>
+      </div>
+      
+      <!-- Online count -->
+      <div class="online-count">
+        <i class="fas fa-circle"></i>
+        <span id="onlineCount">0</span> peers online
       </div>
       
       <div class="search-box">
@@ -654,6 +703,12 @@
       </div>
       
       <div class="contacts-list" id="contactsList"></div>
+      
+      <div style="padding: 16px;">
+        <button id="showAddPeerBtn" class="btn btn-secondary" style="margin-bottom: 0;">
+          <i class="fas fa-user-plus"></i> Add Peer
+        </button>
+      </div>
     </div>
     
     <!-- Chat Area -->
@@ -668,7 +723,7 @@
         </div>
         
         <div class="chat-actions">
-          <button class="chat-action-btn" id="viewProfileBtn" title="Profile">
+          <button class="chat-action-btn" id="viewProfileBtn" title="View Profile">
             <i class="fas fa-user"></i>
           </button>
           <button class="chat-action-btn" id="startAudioCallBtn" title="Voice Call">
@@ -680,13 +735,19 @@
           <button class="chat-action-btn" id="attachFileBtn" title="Attach File">
             <i class="fas fa-paperclip"></i>
           </button>
-          <button class="chat-action-btn" id="showSDPBtn" title="Manual Connection">
-            <i class="fas fa-exchange-alt"></i>
+          <button class="chat-action-btn" id="qrBtn" title="Show My QR">
+            <i class="fas fa-qrcode"></i>
           </button>
         </div>
       </div>
       
       <div class="messages-container" id="messagesContainer"></div>
+      
+      <!-- QR Area (hidden by default) -->
+      <div id="qrArea" style="display: none; padding: 20px; text-align: center; background: var(--bg-tertiary); margin: 0 20px 20px; border-radius: 16px;">
+        <div id="qrcode" style="display: flex; justify-content: center; margin-bottom: 10px;"></div>
+        <p style="color: var(--text-muted);">Scan to connect: <span id="qrPeerId"></span></p>
+      </div>
       
       <div class="input-area">
         <div class="input-wrapper">
@@ -698,1028 +759,1010 @@
       </div>
     </div>
   </div>
-</div>
 
-<!-- SDP Exchange Panel -->
-<div class="modal-backdrop" id="modalBackdrop"></div>
-<div class="sdp-panel" id="sdpPanel">
-  <h3 style="margin-bottom: 16px;">Manual SDP Exchange</h3>
-  
-  <div style="margin-bottom: 20px;">
-    <button class="btn btn-primary" id="copyLocalSDPBtn" style="width: auto; padding: 10px 20px; margin-right: 10px;">
-      Copy My SDP
+  <!-- Add Peer Modal -->
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="add-peer-panel" id="addPeerPanel">
+    <h3 style="margin-bottom: 20px;"><i class="fas fa-user-plus"></i> Add Peer</h3>
+    
+    <div class="input-group">
+      <input type="text" id="newPeerDomain" class="input-field" placeholder="bob.hns">
+    </div>
+    
+    <button id="connectToPeerBtn" class="btn btn-primary" style="margin-bottom: 20px;">
+      <i class="fas fa-plug"></i> Connect
     </button>
-    <button class="btn btn-secondary" id="showQRBtn" style="width: auto; padding: 10px 20px;">
-      Show QR
-    </button>
-  </div>
-  
-  <div id="qrDisplay" class="qr-container hidden"></div>
-  
-  <textarea id="localSDP" class="sdp-textarea" placeholder="Your SDP will appear here..." readonly></textarea>
-  
-  <h4 style="margin: 16px 0 8px;">Paste Remote SDP:</h4>
-  <textarea id="remoteSDP" class="sdp-textarea" placeholder="Paste other peer's SDP here..."></textarea>
-  
-  <div style="display: flex; gap: 12px; margin-top: 20px;">
-    <button class="btn btn-primary" id="connectSDPBtn" style="flex: 1;">
-      Connect
-    </button>
-    <button class="btn btn-secondary" id="closeSDPBtn" style="flex: 1;">
+    
+    <h4 style="margin: 20px 0 10px;">Or select from discovered peers:</h4>
+    <div class="peer-list-modal" id="discoveredPeersList">
+      <div class="peer-item">
+        <i class="fas fa-spinner fa-spin"></i> Scanning network...
+      </div>
+    </div>
+    
+    <button id="closeAddPeerBtn" class="btn btn-secondary" style="margin-bottom: 0;">
       Close
     </button>
   </div>
-</div>
 
-<!-- Video Call Overlay -->
-<div class="video-overlay" id="videoOverlay">
-  <div class="video-grid" id="videoGrid"></div>
-  <div class="video-controls">
-    <button class="video-control-btn" id="toggleMicBtn">
-      <i class="fas fa-microphone"></i>
-    </button>
-    <button class="video-control-btn" id="toggleCameraBtn">
-      <i class="fas fa-video"></i>
-    </button>
-    <button class="video-control-btn danger" id="endCallBtn">
-      <i class="fas fa-phone-slash"></i>
-    </button>
+  <!-- Video Call Overlay -->
+  <div class="video-overlay" id="videoOverlay">
+    <div class="video-grid" id="videoGrid"></div>
+    <div class="video-controls">
+      <button class="video-control-btn" id="toggleMicBtn">
+        <i class="fas fa-microphone"></i>
+      </button>
+      <button class="video-control-btn" id="toggleCameraBtn">
+        <i class="fas fa-video"></i>
+      </button>
+      <button class="video-control-btn danger" id="endCallBtn">
+        <i class="fas fa-phone-slash"></i>
+      </button>
+    </div>
   </div>
-</div>
 
-<!-- Font Awesome -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<script>
-// Configuration
-const STUN_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' }
-];
-
-const ENCRYPTION_KEY = 'nebula-secret-2024';
-
-// State
-let myDomain = '';
-let myProfile = null;
-let currentChallenge = '';
-let peerConnections = new Map(); // domain -> RTCPeerConnection
-let dataChannels = new Map(); // domain -> RTCDataChannel
-let mediaStreams = new Map(); // domain -> MediaStream
-let contacts = new Map(); // domain -> profile
-let messages = new Map(); // domain -> message array
-let selectedContact = null;
-let localStream = null;
-let fileTransfers = new Map(); // transferId -> transfer info
-let pendingCandidates = new Map(); // domain -> ICE candidates
-
-// DOM Elements
-const loginScreen = document.getElementById('loginScreen');
-const appMain = document.getElementById('appMain');
-const domainInput = document.getElementById('domainInput');
-const loginBtn = document.getElementById('loginBtn');
-const challengeArea = document.getElementById('challengeArea');
-const challengeText = document.getElementById('challengeText');
-const verifyBtn = document.getElementById('verifyBtn');
-const loginStatus = document.getElementById('loginStatus');
-const myAvatar = document.getElementById('myAvatar');
-const myAvatarText = document.getElementById('myAvatarText');
-const myName = document.getElementById('myName');
-const myDomainEl = document.getElementById('myDomain');
-const connectionStatus = document.getElementById('connectionStatus');
-const searchInput = document.getElementById('searchInput');
-const contactsList = document.getElementById('contactsList');
-const messagesContainer = document.getElementById('messagesContainer');
-const messageInput = document.getElementById('messageInput');
-const sendBtn = document.getElementById('sendBtn');
-const currentChatName = document.getElementById('currentChatName');
-const currentChatDomain = document.getElementById('currentChatDomain');
-const currentChatStatus = document.getElementById('currentChatStatus');
-const viewProfileBtn = document.getElementById('viewProfileBtn');
-const startAudioCallBtn = document.getElementById('startAudioCallBtn');
-const startVideoCallBtn = document.getElementById('startVideoCallBtn');
-const attachFileBtn = document.getElementById('attachFileBtn');
-const showSDPBtn = document.getElementById('showSDPBtn');
-const sdpPanel = document.getElementById('sdpPanel');
-const modalBackdrop = document.getElementById('modalBackdrop');
-const localSDP = document.getElementById('localSDP');
-const remoteSDP = document.getElementById('remoteSDP');
-const copyLocalSDPBtn = document.getElementById('copyLocalSDPBtn');
-const showQRBtn = document.getElementById('showQRBtn');
-const qrDisplay = document.getElementById('qrDisplay');
-const connectSDPBtn = document.getElementById('connectSDPBtn');
-const closeSDPBtn = document.getElementById('closeSDPBtn');
-const videoOverlay = document.getElementById('videoOverlay');
-const videoGrid = document.getElementById('videoGrid');
-const toggleMicBtn = document.getElementById('toggleMicBtn');
-const toggleCameraBtn = document.getElementById('toggleCameraBtn');
-const endCallBtn = document.getElementById('endCallBtn');
-
-// DNS TXT lookup
-async function fetchTXTRecords(domain) {
-  try {
-    const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
-    const data = await response.json();
+  <script>
+    // Configuration
+    const ENCRYPTION_KEY = 'nebula-secret-key-2024';
+    const DEFAULT_AVATAR = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
     
-    if (data.Answer && data.Answer.length > 0) {
-      return data.Answer
-        .filter(record => record.type === 16)
-        .map(record => record.data.replace(/"/g, ''));
-    }
-    return [];
-  } catch (e) {
-    console.error('DNS fetch error:', e);
-    return [];
-  }
-}
+    // State
+    let peer = null;
+    let myDomain = '';
+    let myProfile = null;
+    let currentChallenge = '';
+    let connections = new Map(); // domain -> {conn, channel, stream}
+    let contacts = new Map(); // domain -> profile
+    let messages = new Map(); // domain -> message array
+    let selectedContact = null;
+    let localStream = null;
+    let mediaCalls = new Map(); // domain -> media call
+    let fileTransfers = new Map(); // transferId -> transfer info
+    let discoveredPeers = new Set(); // domains we've seen
+    
+    // DOM Elements
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    const domainInput = document.getElementById('domainInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const challengeArea = document.getElementById('challengeArea');
+    const challengeText = document.getElementById('challengeText');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const loginStatus = document.getElementById('loginStatus');
+    
+    const myAvatar = document.getElementById('myAvatar');
+    const myAvatarText = document.getElementById('myAvatarText');
+    const myName = document.getElementById('myName');
+    const myDomainEl = document.getElementById('myDomain');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const onlineCount = document.getElementById('onlineCount');
+    const searchInput = document.getElementById('searchInput');
+    const contactsList = document.getElementById('contactsList');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const currentChatName = document.getElementById('currentChatName');
+    const currentChatDomain = document.getElementById('currentChatDomain');
+    const currentChatStatus = document.getElementById('currentChatStatus');
+    
+    const viewProfileBtn = document.getElementById('viewProfileBtn');
+    const startAudioCallBtn = document.getElementById('startAudioCallBtn');
+    const startVideoCallBtn = document.getElementById('startVideoCallBtn');
+    const attachFileBtn = document.getElementById('attachFileBtn');
+    const qrBtn = document.getElementById('qrBtn');
+    const qrArea = document.getElementById('qrArea');
+    const qrcode = document.getElementById('qrcode');
+    const qrPeerId = document.getElementById('qrPeerId');
+    
+    const showAddPeerBtn = document.getElementById('showAddPeerBtn');
+    const addPeerPanel = document.getElementById('addPeerPanel');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const newPeerDomain = document.getElementById('newPeerDomain');
+    const connectToPeerBtn = document.getElementById('connectToPeerBtn');
+    const discoveredPeersList = document.getElementById('discoveredPeersList');
+    const closeAddPeerBtn = document.getElementById('closeAddPeerBtn');
+    
+    const videoOverlay = document.getElementById('videoOverlay');
+    const videoGrid = document.getElementById('videoGrid');
+    const toggleMicBtn = document.getElementById('toggleMicBtn');
+    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const endCallBtn = document.getElementById('endCallBtn');
 
-// Parse profile from TXT records
-function parseProfile(domain, records) {
-  const profile = {
-    domain: domain,
-    name: domain.split('.')[0],
-    avatar: null,
-    bio: '',
-    links: [],
-    wallets: []
-  };
-  
-  records.forEach(record => {
-    const [key, ...valueParts] = record.split(':');
-    const value = valueParts.join(':');
-    
-    switch(key) {
-      case 'name': profile.name = value; break;
-      case 'pfp': profile.avatar = `https://${value}`; break;
-      case 'bio': profile.bio = value; break;
-      case 'x':
-        profile.links.push({ type: 'x', url: `https://x.com/${value}`, icon: 'fab fa-x-twitter' });
-        break;
-      case 'gh':
-        profile.links.push({ type: 'gh', url: `https://github.com/${value}`, icon: 'fab fa-github' });
-        break;
-      case 'btc':
-        profile.wallets.push({ currency: 'btc', address: value, icon: 'fab fa-bitcoin' });
-        break;
-      case 'eth':
-        profile.wallets.push({ currency: 'eth', address: value, icon: 'fab fa-ethereum' });
-        break;
-    }
-  });
-  
-  return profile;
-}
-
-// Login flow
-loginBtn.addEventListener('click', async () => {
-  const domain = domainInput.value.trim().toLowerCase();
-  if (!domain) return;
-  
-  myDomain = domain;
-  currentChallenge = 'hnschat-' + Math.random().toString(36).substring(2, 10);
-  challengeText.textContent = currentChallenge;
-  challengeArea.classList.remove('hidden');
-  loginStatus.textContent = 'Add this TXT record to your domain, then click verify';
-  
-  localStorage.setItem('nebula-domain', myDomain);
-  localStorage.setItem('nebula-challenge', currentChallenge);
-});
-
-verifyBtn.addEventListener('click', async () => {
-  loginStatus.textContent = 'Checking DNS...';
-  const txts = await fetchTXTRecords(myDomain);
-  
-  if (txts.includes(currentChallenge)) {
-    loginStatus.textContent = '✅ Domain verified! Loading profile...';
-    
-    // Load own profile
-    const records = await fetchTXTRecords(myDomain);
-    myProfile = parseProfile(myDomain, records);
-    
-    // Update UI
-    myName.textContent = myProfile.name;
-    myDomainEl.textContent = `@${myDomain}`;
-    if (myProfile.avatar) {
-      myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
-    } else {
-      myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
-    }
-    
-    // Show main app
-    loginScreen.style.display = 'none';
-    appMain.classList.add('active');
-    connectionStatus.style.background = '#31a24c';
-    
-    // Add sample contacts for demo
-    addSampleContacts();
-  } else {
-    loginStatus.textContent = '❌ Challenge not found. Make sure you added the TXT record.';
-  }
-});
-
-// Create RTCPeerConnection with STUN servers
-function createPeerConnection(domain) {
-  const pc = new RTCPeerConnection({
-    iceServers: STUN_SERVERS,
-    iceCandidatePoolSize: 10
-  });
-  
-  // Handle ICE candidates
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      // Store candidate for this peer
-      if (!pendingCandidates.has(domain)) {
-        pendingCandidates.set(domain, []);
-      }
-      pendingCandidates.get(domain).push(event.candidate);
-      
-      // Update SDP textarea if this is the current peer
-      if (domain === selectedContact) {
-        updateLocalSDP(domain);
-      }
-    }
-  };
-  
-  // Handle connection state changes
-  pc.onconnectionstatechange = () => {
-    console.log(`Connection state for ${domain}:`, pc.connectionState);
-    if (pc.connectionState === 'connected') {
-      // User is online
-      updateContactStatus(domain, true);
-    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-      updateContactStatus(domain, false);
-    }
-  };
-  
-  // Handle incoming data channels
-  pc.ondatachannel = (event) => {
-    const channel = event.channel;
-    dataChannels.set(domain, channel);
-    setupDataChannel(channel, domain);
-  };
-  
-  // Handle incoming media streams
-  pc.ontrack = (event) => {
-    const [stream] = event.streams;
-    mediaStreams.set(domain, stream);
-    
-    // Show video overlay
-    if (event.track.kind === 'video') {
-      showRemoteVideo(domain, stream);
-    }
-  };
-  
-  return pc;
-}
-
-// Setup data channel
-function setupDataChannel(channel, domain) {
-  channel.onopen = () => {
-    console.log(`Data channel open with ${domain}`);
-    updateContactStatus(domain, true);
-    
-    // Send profile info
-    channel.send(JSON.stringify({
-      type: 'profile',
-      profile: myProfile
-    }));
-  };
-  
-  channel.onmessage = (event) => {
-    const data = event.data;
-    
-    // Try to parse as JSON
-    try {
-      const obj = JSON.parse(data);
-      
-      if (obj.type === 'profile') {
-        // Store contact profile
-        if (!contacts.has(domain)) {
-          contacts.set(domain, obj.profile);
-          updateContactsList();
+    // DNS TXT lookup
+    async function fetchTXTRecords(domain) {
+      try {
+        const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
+        const data = await response.json();
+        
+        if (data.Answer && data.Answer.length > 0) {
+          return data.Answer
+            .filter(record => record.type === 16)
+            .map(record => record.data.replace(/"/g, ''));
         }
+        return [];
+      } catch (e) {
+        console.error('DNS fetch error:', e);
+        return [];
+      }
+    }
+
+    // Parse profile from TXT records
+    function parseProfile(domain, records) {
+      const profile = {
+        domain: domain,
+        name: domain.split('.')[0],
+        avatar: null,
+        bio: '',
+        links: [],
+        wallets: []
+      };
+      
+      records.forEach(record => {
+        const [key, ...valueParts] = record.split(':');
+        const value = valueParts.join(':');
+        
+        switch(key) {
+          case 'name': profile.name = value; break;
+          case 'pfp': profile.avatar = `https://${value}`; break;
+          case 'bio': profile.bio = value; break;
+          case 'x':
+            profile.links.push({ type: 'x', url: `https://x.com/${value}`, icon: 'fab fa-x-twitter' });
+            break;
+          case 'gh':
+            profile.links.push({ type: 'gh', url: `https://github.com/${value}`, icon: 'fab fa-github' });
+            break;
+          case 'btc':
+            profile.wallets.push({ currency: 'btc', address: value, icon: 'fab fa-bitcoin' });
+            break;
+          case 'eth':
+            profile.wallets.push({ currency: 'eth', address: value, icon: 'fab fa-ethereum' });
+            break;
+        }
+      });
+      
+      return profile;
+    }
+
+    // Login flow
+    loginBtn.addEventListener('click', async () => {
+      const domain = domainInput.value.trim().toLowerCase();
+      if (!domain) return;
+      
+      myDomain = domain;
+      currentChallenge = 'hnschat-' + Math.random().toString(36).substring(2, 10);
+      challengeText.textContent = currentChallenge;
+      challengeArea.classList.remove('hidden');
+      loginStatus.textContent = 'Add this TXT record to your domain, then click verify';
+      
+      localStorage.setItem('nebula-domain', myDomain);
+      localStorage.setItem('nebula-challenge', currentChallenge);
+    });
+
+    verifyBtn.addEventListener('click', async () => {
+      loginStatus.textContent = 'Checking DNS...';
+      const txts = await fetchTXTRecords(myDomain);
+      
+      if (txts.includes(currentChallenge)) {
+        loginStatus.textContent = '✅ Domain verified! Starting peer...';
+        
+        // Load own profile
+        const records = await fetchTXTRecords(myDomain);
+        myProfile = parseProfile(myDomain, records);
+        
+        // Update UI
+        myName.textContent = myProfile.name;
+        myDomainEl.textContent = `@${myDomain}`;
+        if (myProfile.avatar) {
+          myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+        } else {
+          myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+        }
+        
+        // Start PeerJS
+        startPeer();
+      } else {
+        loginStatus.textContent = '❌ Challenge not found. Make sure you added the TXT record.';
+      }
+    });
+
+    // Start PeerJS (handles signaling automatically!)
+    function startPeer() {
+      try {
+        peer = new Peer(myDomain);
+        
+        peer.on('open', (id) => {
+          loginScreen.classList.add('hidden');
+          mainApp.classList.remove('hidden');
+          connectionStatus.classList.remove('offline');
+          
+          // Show QR code
+          qrcode.innerHTML = '';
+          new QRCode(qrcode, {
+            text: id,
+            width: 200,
+            height: 200
+          });
+          qrPeerId.textContent = id;
+          
+          // Start peer discovery
+          startPeerDiscovery();
+        });
+        
+        peer.on('connection', (conn) => {
+          setupConnection(conn);
+        });
+        
+        peer.on('call', (call) => {
+          if (localStream) {
+            call.answer(localStream);
+            setupMediaCall(call);
+          }
+        });
+        
+        peer.on('error', (err) => {
+          console.error('Peer error:', err);
+          if (err.type === 'unavailable-id') {
+            alert('This domain is already in use. Try a different one.');
+          }
+        });
+        
+        peer.on('disconnected', () => {
+          connectionStatus.classList.add('offline');
+          setTimeout(() => {
+            peer.reconnect();
+          }, 5000);
+        });
+        
+      } catch (e) {
+        console.error('Failed to start peer:', e);
+      }
+    }
+
+    // Setup data connection
+    function setupConnection(conn) {
+      const peerId = conn.peer;
+      
+      // Store connection
+      connections.set(peerId, { conn });
+      
+      // Fetch peer's profile
+      fetchTXTRecords(peerId).then(records => {
+        const profile = parseProfile(peerId, records);
+        contacts.set(peerId, { ...profile, online: true });
+        discoveredPeers.add(peerId);
+        updateContactsList();
+        updateOnlineCount();
+      });
+      
+      conn.on('open', () => {
+        // Send our profile
+        conn.send(JSON.stringify({
+          type: 'profile',
+          profile: myProfile
+        }));
+      });
+      
+      conn.on('data', (data) => {
+        if (typeof data !== 'string') return;
+        
+        // Try to parse as JSON
+        try {
+          const obj = JSON.parse(data);
+          
+          if (obj.type === 'profile') {
+            // Store peer's profile
+            contacts.set(peerId, { ...obj.profile, online: true });
+            discoveredPeers.add(peerId);
+            updateContactsList();
+            updateOnlineCount();
+            return;
+          }
+          
+          if (obj.type === 'file-info') {
+            handleFileInfo(peerId, obj);
+            return;
+          }
+          
+          if (obj.type === 'file-chunk') {
+            handleFileChunk(peerId, obj);
+            return;
+          }
+        } catch (e) {
+          // Not JSON, treat as text message
+        }
+        
+        // Text message
+        const message = {
+          type: 'text',
+          text: data,
+          from: peerId,
+          to: myDomain,
+          timestamp: Date.now()
+        };
+        
+        addMessage(peerId, message);
+      });
+      
+      conn.on('close', () => {
+        const contact = contacts.get(peerId);
+        if (contact) {
+          contact.online = false;
+          contacts.set(peerId, contact);
+        }
+        connections.delete(peerId);
+        mediaCalls.delete(peerId);
+        updateContactsList();
+        updateOnlineCount();
+      });
+    }
+
+    // Setup media call
+    function setupMediaCall(call) {
+      const peerId = call.peer;
+      
+      call.on('stream', (remoteStream) => {
+        mediaCalls.set(peerId, { call, stream: remoteStream });
+        showRemoteVideo(peerId, remoteStream);
+      });
+      
+      call.on('close', () => {
+        const videoEl = document.getElementById(`video-${peerId}`);
+        if (videoEl) videoEl.remove();
+        mediaCalls.delete(peerId);
+        
+        if (videoGrid.children.length === 0) {
+          videoOverlay.classList.remove('active');
+        }
+      });
+    }
+
+    // Connect to a peer by domain
+    async function connectToPeer(domain) {
+      if (!domain) return;
+      
+      // Check if already connected
+      if (connections.has(domain)) {
+        selectContact(domain);
+        addPeerPanel.classList.remove('active');
+        modalBackdrop.classList.remove('active');
         return;
       }
       
-      if (obj.type === 'file-info') {
-        handleFileInfo(domain, obj);
-        return;
+      // Try to find peer ID from TXT
+      const txts = await fetchTXTRecords(domain);
+      let peerId = domain;
+      
+      for (let txt of txts) {
+        if (txt.startsWith('hnschat-peer=')) {
+          peerId = txt.split('=')[1];
+          break;
+        }
       }
       
-      if (obj.type === 'file-chunk') {
-        handleFileChunk(domain, obj);
-        return;
+      // Connect via PeerJS
+      const conn = peer.connect(peerId);
+      setupConnection(conn);
+      
+      // Add to contacts if not exists
+      if (!contacts.has(domain)) {
+        contacts.set(domain, {
+          domain: domain,
+          name: domain.split('.')[0],
+          online: true
+        });
       }
-    } catch (e) {
-      // Not JSON, treat as text message
+      
+      // Close modal
+      addPeerPanel.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+      
+      // Select this contact
+      setTimeout(() => selectContact(domain), 1000);
     }
-    
-    // Text message
-    const message = {
-      type: 'text',
-      text: data,
-      from: domain,
-      to: myDomain,
-      timestamp: Date.now()
-    };
-    
-    addMessage(domain, message);
-  };
-  
-  channel.onclose = () => {
-    updateContactStatus(domain, false);
-  };
-}
 
-// Update contact online status
-function updateContactStatus(domain, online) {
-  const contact = contacts.get(domain);
-  if (contact) {
-    contact.online = online;
-    updateContactsList();
-    
-    if (selectedContact === domain) {
-      currentChatStatus.className = `online-indicator ${online ? '' : 'offline'}`;
+    // Add message to history
+    function addMessage(domain, message) {
+      if (!messages.has(domain)) {
+        messages.set(domain, []);
+      }
+      messages.get(domain).push(message);
+      
+      if (selectedContact === domain) {
+        displayMessage(message, message.from === myDomain);
+      }
+      
+      updateContactsList();
     }
-  }
-}
 
-// Add message to history
-function addMessage(domain, message) {
-  if (!messages.has(domain)) {
-    messages.set(domain, []);
-  }
-  messages.get(domain).push(message);
-  
-  if (selectedContact === domain) {
-    displayMessage(message, message.from === myDomain);
-  }
-  
-  updateContactsList();
-}
-
-// Display message in UI
-function displayMessage(message, isOwn) {
-  const wrapper = document.createElement('div');
-  wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
-  
-  let content = '';
-  if (message.type === 'text') {
-    content = `<div class="message-bubble">
-      ${message.text}
-      <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
-    </div>`;
-  } else if (message.type === 'file') {
-    content = `<div class="message-bubble">
-      <div class="message-file" onclick="downloadFile('${message.transferId}')">
-        <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
-        <div style="flex:1">
-          <div>${message.fileName}</div>
-          <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
-          ${message.progress ? `
-            <div class="file-progress">
-              <div class="file-progress-fill" style="width: ${message.progress}%"></div>
+    // Display message in UI
+    function displayMessage(message, isOwn) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
+      
+      let content = '';
+      if (message.type === 'text') {
+        content = `<div class="message-bubble">
+          ${message.text}
+          <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
+        </div>`;
+      } else if (message.type === 'file') {
+        content = `<div class="message-bubble">
+          <div class="message-file" onclick="downloadFile('${message.transferId}')">
+            <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
+            <div style="flex:1">
+              <div>${message.fileName}</div>
+              <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
+              ${message.progress ? `
+                <div class="file-progress">
+                  <div class="file-progress-fill" style="width: ${message.progress}%"></div>
+                </div>
+              ` : ''}
             </div>
-          ` : ''}
-        </div>
-      </div>
-      <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
-    </div>`;
-  }
-  
-  wrapper.innerHTML = content;
-  messagesContainer.appendChild(wrapper);
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
+          </div>
+          <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
+        </div>`;
+      }
+      
+      wrapper.innerHTML = content;
+      messagesContainer.appendChild(wrapper);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
 
-// Update contacts list UI
-function updateContactsList() {
-  contactsList.innerHTML = '';
-  
-  const sortedContacts = Array.from(contacts.values()).sort((a, b) => {
-    if (a.online && !b.online) return -1;
-    if (!a.online && b.online) return 1;
-    return 0;
-  });
-  
-  sortedContacts.forEach(contact => {
-    const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
-    
-    const div = document.createElement('div');
-    div.className = `contact-item ${selectedContact === contact.domain ? 'selected' : ''}`;
-    div.onclick = () => selectContact(contact.domain);
-    
-    div.innerHTML = `
-      <div class="contact-avatar">
-        ${contact.avatar 
-          ? `<img src="${contact.avatar}" alt="${contact.name}">`
-          : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
+    // Update contacts list UI
+    function updateContactsList() {
+      contactsList.innerHTML = '';
+      
+      const sortedContacts = Array.from(contacts.values()).sort((a, b) => {
+        if (a.online && !b.online) return -1;
+        if (!a.online && b.online) return 1;
+        return 0;
+      });
+      
+      sortedContacts.forEach(contact => {
+        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
+        const isSelected = selectedContact === contact.domain;
+        
+        const div = document.createElement('div');
+        div.className = `contact-item ${isSelected ? 'selected' : ''}`;
+        div.onclick = () => selectContact(contact.domain);
+        
+        div.innerHTML = `
+          <div class="contact-avatar">
+            ${contact.avatar 
+              ? `<img src="${contact.avatar}" alt="${contact.name}">`
+              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
+            }
+          </div>
+          <div class="contact-details">
+            <div class="contact-name">
+              ${contact.name}
+              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
+            </div>
+            <div class="contact-domain">@${contact.domain}</div>
+            <div class="last-message">${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}</div>
+          </div>
+        `;
+        
+        contactsList.appendChild(div);
+      });
+      
+      // Update discovered peers list
+      updateDiscoveredPeersList();
+    }
+
+    // Update discovered peers list in modal
+    function updateDiscoveredPeersList() {
+      if (discoveredPeers.size === 0) {
+        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered yet</div>';
+        return;
+      }
+      
+      discoveredPeersList.innerHTML = '';
+      Array.from(discoveredPeers).forEach(domain => {
+        if (domain !== myDomain) {
+          const div = document.createElement('div');
+          div.className = 'peer-item';
+          div.onclick = () => {
+            newPeerDomain.value = domain;
+            connectToPeer(domain);
+          };
+          div.innerHTML = `
+            <i class="fas fa-user"></i>
+            <div>
+              <div>${domain}</div>
+              <small style="color: var(--text-muted);">${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}</small>
+            </div>
+          `;
+          discoveredPeersList.appendChild(div);
         }
-      </div>
-      <div class="contact-details">
-        <div class="contact-name">
-          ${contact.name}
-          <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
-        </div>
-        <div class="contact-domain">@${contact.domain}</div>
-        <div class="last-message">${lastMsg ? lastMsg.text : ''}</div>
-      </div>
-    `;
-    
-    contactsList.appendChild(div);
-  });
-}
-
-// Select contact
-function selectContact(domain) {
-  selectedContact = domain;
-  const contact = contacts.get(domain);
-  
-  if (contact) {
-    currentChatName.textContent = contact.name;
-    currentChatDomain.textContent = `@${domain}`;
-    currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
-    
-    // Load messages
-    messagesContainer.innerHTML = '';
-    const contactMessages = messages.get(domain) || [];
-    contactMessages.forEach(msg => {
-      displayMessage(msg, msg.from === myDomain);
-    });
-    
-    updateContactsList();
-  }
-}
-
-// Start audio/video call
-async function startCall(withVideo = false) {
-  if (!selectedContact) return;
-  
-  try {
-    // Get user media
-    if (!localStream) {
-      localStream = await navigator.mediaDevices.getUserMedia({
-        video: withVideo,
-        audio: true
       });
     }
-    
-    // Get or create peer connection
-    let pc = peerConnections.get(selectedContact);
-    if (!pc) {
-      pc = createPeerConnection(selectedContact);
-      peerConnections.set(selectedContact, pc);
-    }
-    
-    // Add tracks
-    localStream.getTracks().forEach(track => {
-      pc.addTrack(track, localStream);
-    });
-    
-    // Create data channel if doesn't exist
-    if (!dataChannels.has(selectedContact)) {
-      const channel = pc.createDataChannel('chat');
-      dataChannels.set(selectedContact, channel);
-      setupDataChannel(channel, selectedContact);
-    }
-    
-    // Create offer
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    
-    // Update SDP display
-    updateLocalSDP(selectedContact);
-    
-    // Show SDP panel
-    showSDPPanel();
-    
-    // Show local video
-    if (withVideo) {
-      showLocalVideo();
-    }
-  } catch (err) {
-    console.error('Call error:', err);
-    alert('Could not start call: ' + err.message);
-  }
-}
 
-// Show local video
-function showLocalVideo() {
-  videoOverlay.classList.add('active');
-  
-  let wrapper = document.getElementById('video-local');
-  if (!wrapper) {
-    wrapper = document.createElement('div');
-    wrapper.className = 'video-wrapper';
-    wrapper.id = 'video-local';
-    
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.playsInline = true;
-    video.muted = true;
-    video.srcObject = localStream;
-    
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    label.textContent = 'You';
-    
-    wrapper.appendChild(video);
-    wrapper.appendChild(label);
-    videoGrid.prepend(wrapper);
-  }
-}
-
-// Show remote video
-function showRemoteVideo(domain, stream) {
-  videoOverlay.classList.add('active');
-  
-  let wrapper = document.getElementById(`video-${domain}`);
-  if (!wrapper) {
-    wrapper = document.createElement('div');
-    wrapper.className = 'video-wrapper';
-    wrapper.id = `video-${domain}`;
-    
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.playsInline = true;
-    video.srcObject = stream;
-    
-    const label = document.createElement('div');
-    label.className = 'video-label';
-    label.textContent = contacts.get(domain)?.name || domain;
-    
-    wrapper.appendChild(video);
-    wrapper.appendChild(label);
-    videoGrid.appendChild(wrapper);
-  }
-}
-
-// End call
-function endCall() {
-  // Close all peer connections
-  peerConnections.forEach((pc, domain) => {
-    pc.close();
-  });
-  
-  peerConnections.clear();
-  dataChannels.clear();
-  mediaStreams.clear();
-  pendingCandidates.clear();
-  
-  // Stop local stream
-  if (localStream) {
-    localStream.getTracks().forEach(t => t.stop());
-    localStream = null;
-  }
-  
-  // Hide video
-  videoOverlay.classList.remove('active');
-  videoGrid.innerHTML = '';
-  
-  // Update statuses
-  contacts.forEach((_, domain) => {
-    updateContactStatus(domain, false);
-  });
-}
-
-// Update local SDP display
-function updateLocalSDP(domain) {
-  const pc = peerConnections.get(domain);
-  if (pc && pc.localDescription) {
-    const sdpInfo = {
-      type: pc.localDescription.type,
-      sdp: pc.localDescription.sdp,
-      candidates: pendingCandidates.get(domain) || []
-    };
-    localSDP.value = JSON.stringify(sdpInfo, null, 2);
-    
-    // Generate QR code
-    qrDisplay.innerHTML = '';
-    new QRCode(qrDisplay, {
-      text: JSON.stringify(sdpInfo),
-      width: 200,
-      height: 200
-    });
-  }
-}
-
-// Connect using remote SDP
-async function connectWithSDP() {
-  try {
-    const remoteInfo = JSON.parse(remoteSDP.value);
-    
-    if (!selectedContact) {
-      alert('Select a contact first');
-      return;
-    }
-    
-    // Get or create peer connection
-    let pc = peerConnections.get(selectedContact);
-    if (!pc) {
-      pc = createPeerConnection(selectedContact);
-      peerConnections.set(selectedContact, pc);
-      
-      // Create data channel
-      const channel = pc.createDataChannel('chat');
-      dataChannels.set(selectedContact, channel);
-      setupDataChannel(channel, selectedContact);
-    }
-    
-    // Set remote description
-    await pc.setRemoteDescription(new RTCSessionDescription({
-      type: remoteInfo.type,
-      sdp: remoteInfo.sdp
-    }));
-    
-    // Add ICE candidates
-    if (remoteInfo.candidates) {
-      remoteInfo.candidates.forEach(candidate => {
-        pc.addIceCandidate(new RTCIceCandidate(candidate));
+    // Update online count
+    function updateOnlineCount() {
+      let count = 0;
+      contacts.forEach(contact => {
+        if (contact.online) count++;
       });
+      onlineCount.textContent = count;
     }
-    
-    // Create answer if this is an offer
-    if (remoteInfo.type === 'offer') {
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      updateLocalSDP(selectedContact);
-    }
-    
-    alert('Connected!');
-    sdpPanel.classList.remove('active');
-    modalBackdrop.classList.remove('active');
-  } catch (err) {
-    console.error('SDP connection error:', err);
-    alert('Failed to connect: ' + err.message);
-  }
-}
 
-// File transfer
-async function sendFile(file) {
-  if (!selectedContact || !dataChannels.has(selectedContact)) {
-    alert('No connection to peer');
-    return;
-  }
-  
-  const channel = dataChannels.get(selectedContact);
-  const transferId = Date.now() + '-' + Math.random().toString(36);
-  const chunkSize = 16384; // 16KB chunks
-  const totalChunks = Math.ceil(file.size / chunkSize);
-  
-  // Send file info
-  channel.send(JSON.stringify({
-    type: 'file-info',
-    transferId,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    totalChunks
-  }));
-  
-  // Add to messages
-  const message = {
-    type: 'file',
-    fileName: file.name,
-    fileSize: file.size,
-    transferId,
-    from: myDomain,
-    to: selectedContact,
-    timestamp: Date.now(),
-    progress: 0
-  };
-  
-  addMessage(selectedContact, message);
-  
-  // Read and send chunks
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const arrayBuffer = e.target.result;
-    const bytes = new Uint8Array(arrayBuffer);
-    
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * chunkSize;
-      const end = Math.min(start + chunkSize, file.size);
-      const chunk = bytes.slice(start, end);
+    // Select contact
+    function selectContact(domain) {
+      selectedContact = domain;
+      const contact = contacts.get(domain);
       
-      // Convert to base64
-      let binary = '';
-      chunk.forEach(byte => {
-        binary += String.fromCharCode(byte);
-      });
-      const base64 = btoa(binary);
-      
-      channel.send(JSON.stringify({
-        type: 'file-chunk',
-        transferId,
-        index: i,
-        data: base64
-      }));
-      
-      // Update progress
-      message.progress = Math.round(((i + 1) / totalChunks) * 100);
-      
-      // Update UI
-      if (selectedContact) {
+      if (contact) {
+        currentChatName.textContent = contact.name;
+        currentChatDomain.textContent = `@${domain}`;
+        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
+        
+        // Load messages
         messagesContainer.innerHTML = '';
-        const contactMessages = messages.get(selectedContact) || [];
+        const contactMessages = messages.get(domain) || [];
         contactMessages.forEach(msg => {
           displayMessage(msg, msg.from === myDomain);
         });
+        
+        updateContactsList();
       }
     }
-  };
-  
-  reader.readAsArrayBuffer(file);
-}
 
-// Handle file info
-function handleFileInfo(domain, info) {
-  fileTransfers.set(info.transferId, {
-    ...info,
-    chunks: new Array(info.totalChunks),
-    received: 0,
-    peerId: domain
-  });
-  
-  const message = {
-    type: 'file',
-    fileName: info.name,
-    fileSize: info.size,
-    transferId: info.transferId,
-    from: domain,
-    to: myDomain,
-    timestamp: Date.now(),
-    progress: 0
-  };
-  
-  addMessage(domain, message);
-}
+    // Start audio/video call
+    async function startCall(withVideo = false) {
+      if (!selectedContact || !connections.has(selectedContact)) {
+        alert('User is not connected');
+        return;
+      }
+      
+      try {
+        if (!localStream) {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: withVideo,
+            audio: true
+          });
+        }
+        
+        const call = peer.call(selectedContact, localStream);
+        setupMediaCall(call);
+        
+        // Show local video
+        showLocalVideo();
+        
+      } catch (err) {
+        console.error('Call error:', err);
+        alert('Could not start call: ' + err.message);
+      }
+    }
 
-// Handle file chunk
-function handleFileChunk(domain, chunk) {
-  const transfer = fileTransfers.get(chunk.transferId);
-  if (!transfer) return;
-  
-  // Decode base64
-  const binary = atob(chunk.data);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  
-  transfer.chunks[chunk.index] = bytes;
-  transfer.received++;
-  
-  // Update progress
-  const progress = Math.round((transfer.received / transfer.totalChunks) * 100);
-  
-  // Update message
-  const contactMessages = messages.get(domain);
-  const msg = contactMessages.find(m => m.transferId === chunk.transferId);
-  if (msg) {
-    msg.progress = progress;
-    
-    if (selectedContact === domain) {
-      messagesContainer.innerHTML = '';
-      contactMessages.forEach(m => {
-        displayMessage(m, m.from === myDomain);
+    // Show local video
+    function showLocalVideo() {
+      videoOverlay.classList.add('active');
+      
+      let wrapper = document.getElementById('video-local');
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = 'video-local';
+        
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.srcObject = localStream;
+        
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = 'You';
+        
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.prepend(wrapper);
+      }
+    }
+
+    // Show remote video
+    function showRemoteVideo(domain, stream) {
+      videoOverlay.classList.add('active');
+      
+      let wrapper = document.getElementById(`video-${domain}`);
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = `video-${domain}`;
+        
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        
+        const contact = contacts.get(domain);
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = contact?.name || domain;
+        
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
+      }
+    }
+
+    // End call
+    function endCall() {
+      mediaCalls.forEach((data) => {
+        data.call.close();
       });
+      mediaCalls.clear();
+      
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      
+      videoGrid.innerHTML = '';
+      videoOverlay.classList.remove('active');
     }
-  }
-  
-  // Check if complete
-  if (transfer.received === transfer.totalChunks) {
-    completeFileTransfer(chunk.transferId);
-  }
-}
 
-// Complete file transfer
-function completeFileTransfer(transferId) {
-  const transfer = fileTransfers.get(transferId);
-  if (!transfer) return;
-  
-  // Combine chunks
-  let totalLength = 0;
-  transfer.chunks.forEach(chunk => {
-    totalLength += chunk.length;
-  });
-  
-  const combined = new Uint8Array(totalLength);
-  let offset = 0;
-  transfer.chunks.forEach(chunk => {
-    combined.set(chunk, offset);
-    offset += chunk.length;
-  });
-  
-  // Create blob
-  const blob = new Blob([combined], { type: transfer.type });
-  const url = URL.createObjectURL(blob);
-  
-  transfer.blobUrl = url;
-  
-  // Update message
-  const contactMessages = messages.get(transfer.peerId);
-  const msg = contactMessages.find(m => m.transferId === transferId);
-  if (msg) {
-    msg.complete = true;
-    msg.blobUrl = url;
-    
-    if (selectedContact === transfer.peerId) {
-      messagesContainer.innerHTML = '';
-      contactMessages.forEach(m => {
-        displayMessage(m, m.from === myDomain);
+    // File transfer functions
+    async function sendFile(file) {
+      if (!selectedContact || !connections.has(selectedContact)) {
+        alert('No connection to peer');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      const transferId = Date.now() + '-' + Math.random().toString(36);
+      const chunkSize = 16384;
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      
+      // Send file info
+      conn.send(JSON.stringify({
+        type: 'file-info',
+        transferId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        totalChunks
+      }));
+      
+      // Add to messages
+      const message = {
+        type: 'file',
+        fileName: file.name,
+        fileSize: file.size,
+        transferId,
+        from: myDomain,
+        to: selectedContact,
+        timestamp: Date.now(),
+        progress: 0
+      };
+      
+      addMessage(selectedContact, message);
+      
+      // Read and send chunks
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const arrayBuffer = e.target.result;
+        const bytes = new Uint8Array(arrayBuffer);
+        
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, file.size);
+          const chunk = bytes.slice(start, end);
+          
+          // Convert to base64
+          let binary = '';
+          chunk.forEach(byte => {
+            binary += String.fromCharCode(byte);
+          });
+          const base64 = btoa(binary);
+          
+          conn.send(JSON.stringify({
+            type: 'file-chunk',
+            transferId,
+            index: i,
+            data: base64
+          }));
+          
+          // Update progress
+          message.progress = Math.round(((i + 1) / totalChunks) * 100);
+          
+          if (selectedContact) {
+            messagesContainer.innerHTML = '';
+            const contactMessages = messages.get(selectedContact) || [];
+            contactMessages.forEach(msg => {
+              displayMessage(msg, msg.from === myDomain);
+            });
+          }
+        }
+      };
+      
+      reader.readAsArrayBuffer(file);
+    }
+
+    function handleFileInfo(domain, info) {
+      fileTransfers.set(info.transferId, {
+        ...info,
+        chunks: new Array(info.totalChunks),
+        received: 0,
+        peerId: domain
       });
+      
+      const message = {
+        type: 'file',
+        fileName: info.name,
+        fileSize: info.size,
+        transferId: info.transferId,
+        from: domain,
+        to: myDomain,
+        timestamp: Date.now(),
+        progress: 0
+      };
+      
+      addMessage(domain, message);
     }
-  }
-}
 
-// Download file
-window.downloadFile = function(transferId) {
-  const transfer = fileTransfers.get(transferId);
-  if (transfer && transfer.blobUrl) {
-    const a = document.createElement('a');
-    a.href = transfer.blobUrl;
-    a.download = transfer.name;
-    a.click();
-  }
-};
-
-// Helper functions
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / 1048576).toFixed(1) + ' MB';
-}
-
-function getFileIcon(filename) {
-  const ext = filename.split('.').pop().toLowerCase();
-  if (['jpg','jpeg','png','gif'].includes(ext)) return 'fa-file-image';
-  if (['mp4','avi','mov'].includes(ext)) return 'fa-file-video';
-  if (['mp3','wav'].includes(ext)) return 'fa-file-audio';
-  if (['pdf'].includes(ext)) return 'fa-file-pdf';
-  if (['zip','rar'].includes(ext)) return 'fa-file-archive';
-  return 'fa-file';
-}
-
-// Add sample contacts
-function addSampleContacts() {
-  const bob = {
-    domain: 'bob.hns',
-    name: 'Bob',
-    online: false,
-    avatar: null
-  };
-  
-  const charlie = {
-    domain: 'charlie.hns',
-    name: 'Charlie',
-    online: false,
-    avatar: null
-  };
-  
-  contacts.set('bob.hns', bob);
-  contacts.set('charlie.hns', charlie);
-  
-  messages.set('bob.hns', [{
-    type: 'text',
-    text: 'Hey, ready to test WebRTC?',
-    from: 'bob.hns',
-    to: myDomain,
-    timestamp: Date.now() - 3600000
-  }]);
-  
-  updateContactsList();
-}
-
-// Event Listeners
-sendBtn.addEventListener('click', () => {
-  const text = messageInput.value.trim();
-  if (!text || !selectedContact || !dataChannels.has(selectedContact)) return;
-  
-  const channel = dataChannels.get(selectedContact);
-  channel.send(text);
-  
-  const message = {
-    type: 'text',
-    text: text,
-    from: myDomain,
-    to: selectedContact,
-    timestamp: Date.now()
-  };
-  
-  addMessage(selectedContact, message);
-  messageInput.value = '';
-});
-
-startAudioCallBtn.addEventListener('click', () => startCall(false));
-startVideoCallBtn.addEventListener('click', () => startCall(true));
-
-attachFileBtn.addEventListener('click', () => {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.onchange = (e) => {
-    Array.from(e.target.files).forEach(sendFile);
-  };
-  input.click();
-});
-
-showSDPBtn.addEventListener('click', showSDPPanel);
-
-function showSDPPanel() {
-  sdpPanel.classList.add('active');
-  modalBackdrop.classList.add('active');
-}
-
-closeSDPBtn.addEventListener('click', () => {
-  sdpPanel.classList.remove('active');
-  modalBackdrop.classList.remove('active');
-});
-
-modalBackdrop.addEventListener('click', () => {
-  sdpPanel.classList.remove('active');
-  modalBackdrop.classList.remove('active');
-});
-
-copyLocalSDPBtn.addEventListener('click', () => {
-  localSDP.select();
-  document.execCommand('copy');
-  alert('SDP copied to clipboard!');
-});
-
-showQRBtn.addEventListener('click', () => {
-  qrDisplay.classList.toggle('hidden');
-});
-
-connectSDPBtn.addEventListener('click', connectWithSDP);
-
-endCallBtn.addEventListener('click', endCall);
-
-toggleMicBtn.addEventListener('click', () => {
-  if (localStream) {
-    const audioTrack = localStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !audioTrack.enabled;
-      toggleMicBtn.innerHTML = audioTrack.enabled 
-        ? '<i class="fas fa-microphone"></i>' 
-        : '<i class="fas fa-microphone-slash"></i>';
+    function handleFileChunk(domain, chunk) {
+      const transfer = fileTransfers.get(chunk.transferId);
+      if (!transfer) return;
+      
+      // Decode base64
+      const binary = atob(chunk.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      
+      transfer.chunks[chunk.index] = bytes;
+      transfer.received++;
+      
+      // Update progress
+      const progress = Math.round((transfer.received / transfer.totalChunks) * 100);
+      
+      // Update message
+      const contactMessages = messages.get(domain);
+      const msg = contactMessages.find(m => m.transferId === chunk.transferId);
+      if (msg) {
+        msg.progress = progress;
+        
+        if (selectedContact === domain) {
+          messagesContainer.innerHTML = '';
+          contactMessages.forEach(m => {
+            displayMessage(m, m.from === myDomain);
+          });
+        }
+      }
+      
+      // Check if complete
+      if (transfer.received === transfer.totalChunks) {
+        completeFileTransfer(chunk.transferId);
+      }
     }
-  }
-});
 
-toggleCameraBtn.addEventListener('click', () => {
-  if (localStream) {
-    const videoTrack = localStream.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.enabled = !videoTrack.enabled;
-      toggleCameraBtn.innerHTML = videoTrack.enabled 
-        ? '<i class="fas fa-video"></i>' 
-        : '<i class="fas fa-video-slash"></i>';
+    function completeFileTransfer(transferId) {
+      const transfer = fileTransfers.get(transferId);
+      if (!transfer) return;
+      
+      // Combine chunks
+      let totalLength = 0;
+      transfer.chunks.forEach(chunk => {
+        totalLength += chunk.length;
+      });
+      
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      transfer.chunks.forEach(chunk => {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      });
+      
+      // Create blob
+      const blob = new Blob([combined], { type: transfer.type });
+      const url = URL.createObjectURL(blob);
+      
+      transfer.blobUrl = url;
+      
+      // Update message
+      const contactMessages = messages.get(transfer.peerId);
+      const msg = contactMessages.find(m => m.transferId === transferId);
+      if (msg) {
+        msg.complete = true;
+        msg.blobUrl = url;
+        
+        if (selectedContact === transfer.peerId) {
+          messagesContainer.innerHTML = '';
+          contactMessages.forEach(m => {
+            displayMessage(m, m.from === myDomain);
+          });
+        }
+      }
     }
-  }
-});
 
-// Search
-searchInput.addEventListener('input', (e) => {
-  const term = e.target.value.toLowerCase();
-  document.querySelectorAll('.contact-item').forEach(item => {
-    const name = item.querySelector('.contact-name').textContent.toLowerCase();
-    const domain = item.querySelector('.contact-domain').textContent.toLowerCase();
-    item.style.display = (name.includes(term) || domain.includes(term)) ? 'flex' : 'none';
-  });
-});
+    window.downloadFile = function(transferId) {
+      const transfer = fileTransfers.get(transferId);
+      if (transfer && transfer.blobUrl) {
+        const a = document.createElement('a');
+        a.href = transfer.blobUrl;
+        a.download = transfer.name;
+        a.click();
+      }
+    };
 
-// Auto-resize textarea
-messageInput.addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = (this.scrollHeight) + 'px';
-});
+    // Helper functions
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
 
-// Load saved domain
-const savedDomain = localStorage.getItem('nebula-domain');
-if (savedDomain) {
-  domainInput.value = savedDomain;
-}
+    function getFileIcon(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif'].includes(ext)) return 'fa-file-image';
+      if (['mp4','avi','mov'].includes(ext)) return 'fa-file-video';
+      if (['mp3','wav'].includes(ext)) return 'fa-file-audio';
+      if (['pdf'].includes(ext)) return 'fa-file-pdf';
+      return 'fa-file';
+    }
 
-// Logout function
-window.logout = function() {
-  endCall();
-  localStorage.removeItem('nebula-domain');
-  localStorage.removeItem('nebula-challenge');
-  location.reload();
-};
+    // Peer discovery - periodically check known domains
+    function startPeerDiscovery() {
+      // Try to discover common HNS domains
+      const commonDomains = ['bob.hns', 'charlie.hns', 'alice.hns'];
+      
+      setInterval(() => {
+        commonDomains.forEach(async domain => {
+          if (domain !== myDomain && !connections.has(domain) && !contacts.has(domain)) {
+            const txts = await fetchTXTRecords(domain);
+            if (txts.length > 0) {
+              discoveredPeers.add(domain);
+              updateDiscoveredPeersList();
+            }
+          }
+        });
+      }, 30000);
+    }
 
-// Add logout button
-const logoutBtn = document.createElement('button');
-logoutBtn.className = 'chat-action-btn';
-logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i>';
-logoutBtn.title = 'Logout';
-logoutBtn.onclick = window.logout;
-document.querySelector('.chat-actions').appendChild(logoutBtn);
+    // Event Listeners
+    sendBtn.addEventListener('click', () => {
+      const text = messageInput.value.trim();
+      if (!text || !selectedContact || !connections.has(selectedContact)) return;
+      
+      const conn = connections.get(selectedContact).conn;
+      conn.send(text);
+      
+      const message = {
+        type: 'text',
+        text: text,
+        from: myDomain,
+        to: selectedContact,
+        timestamp: Date.now()
+      };
+      
+      addMessage(selectedContact, message);
+      messageInput.value = '';
+    });
 
-console.log('NEBULA HNS Messenger ready');
-</script>
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    startAudioCallBtn.addEventListener('click', () => startCall(false));
+    startVideoCallBtn.addEventListener('click', () => startCall(true));
+
+    attachFileBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.onchange = (e) => {
+        Array.from(e.target.files).forEach(sendFile);
+      };
+      input.click();
+    });
+
+    qrBtn.addEventListener('click', () => {
+      qrArea.style.display = qrArea.style.display === 'none' ? 'block' : 'none';
+    });
+
+    showAddPeerBtn.addEventListener('click', () => {
+      addPeerPanel.classList.add('active');
+      modalBackdrop.classList.add('active');
+      updateDiscoveredPeersList();
+    });
+
+    closeAddPeerBtn.addEventListener('click', () => {
+      addPeerPanel.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+    });
+
+    modalBackdrop.addEventListener('click', () => {
+      addPeerPanel.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+    });
+
+    connectToPeerBtn.addEventListener('click', () => {
+      connectToPeer(newPeerDomain.value.trim().toLowerCase());
+    });
+
+    newPeerDomain.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        connectToPeer(newPeerDomain.value.trim().toLowerCase());
+      }
+    });
+
+    endCallBtn.addEventListener('click', endCall);
+
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+          audioTrack.enabled = !audioTrack.enabled;
+          toggleMicBtn.innerHTML = audioTrack.enabled 
+            ? '<i class="fas fa-microphone"></i>' 
+            : '<i class="fas fa-microphone-slash"></i>';
+        }
+      }
+    });
+
+    toggleCameraBtn.addEventListener('click', () => {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = !videoTrack.enabled;
+          toggleCameraBtn.innerHTML = videoTrack.enabled 
+            ? '<i class="fas fa-video"></i>' 
+            : '<i class="fas fa-video-slash"></i>';
+        }
+      }
+    });
+
+    viewProfileBtn.addEventListener('click', () => {
+      if (!selectedContact) return;
+      const contact = contacts.get(selectedContact);
+      alert(`Profile: ${contact.name}\nDomain: @${contact.domain}\nBio: ${contact.bio || 'No bio'}`);
+    });
+
+    // Search
+    searchInput.addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase();
+      document.querySelectorAll('.contact-item').forEach(item => {
+        const name = item.querySelector('.contact-name').textContent.toLowerCase();
+        const domain = item.querySelector('.contact-domain').textContent.toLowerCase();
+        item.style.display = (name.includes(term) || domain.includes(term)) ? 'flex' : 'none';
+      });
+    });
+
+    // Load saved domain
+    const savedDomain = localStorage.getItem('nebula-domain');
+    if (savedDomain) {
+      domainInput.value = savedDomain;
+    }
+
+    // Logout
+    window.logout = function() {
+      endCall();
+      if (peer) peer.destroy();
+      localStorage.removeItem('nebula-domain');
+      localStorage.removeItem('nebula-challenge');
+      location.reload();
+    };
+
+    // Add logout button
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'chat-action-btn';
+    logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i>';
+    logoutBtn.title = 'Logout';
+    logoutBtn.onclick = window.logout;
+    document.querySelector('.chat-actions').appendChild(logoutBtn);
+
+    console.log('NEBULA HNS Messenger ready');
+  </script>
 </body>
 </html>
