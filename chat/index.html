@@ -2,19 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>NEBULA • HNS Messenger • Chat • Calls • Files</title>
-  <!-- peerjs for WebRTC (handles signaling automatically!) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NEBULA • HNS</title>
+  <!-- peerjs for WebRTC -->
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <!-- QR code for easy sharing -->
+  <!-- QR Code -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    /* RESET & VARIABLES */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
     }
 
     :root {
@@ -22,7 +24,7 @@
       --bg-secondary: #1a1e24;
       --bg-tertiary: #252b33;
       --bg-hover: #2f3640;
-      --text-primary: #e4e6eb;
+      --text-primary: #ffffff;
       --text-secondary: #b0b3b8;
       --text-muted: #8a8f99;
       --accent-blue: #0088cc;
@@ -33,30 +35,22 @@
       --message-outgoing: #005e99;
       --message-incoming: #262d36;
       --online-indicator: #31a24c;
+      --safe-area-top: env(safe-area-inset-top);
+      --safe-area-bottom: env(safe-area-inset-bottom);
     }
 
     body {
       background: var(--bg-primary);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       color: var(--text-primary);
       height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      height: 100dvh;
       overflow: hidden;
-    }
-
-    .app-container {
+      position: fixed;
       width: 100%;
-      height: 100%;
-      max-width: 1400px;
-      display: flex;
-      background: var(--bg-secondary);
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-      overflow: hidden;
     }
 
-    /* Login Screen */
+    /* LOGIN SCREEN */
     .login-screen {
       position: fixed;
       top: 0;
@@ -68,6 +62,8 @@
       align-items: center;
       justify-content: center;
       z-index: 2000;
+      padding: 20px;
+      overflow-y: auto;
     }
 
     .login-screen.hidden {
@@ -75,12 +71,18 @@
     }
 
     .login-box {
-      width: 400px;
-      max-width: 90%;
+      width: 100%;
+      max-width: 400px;
       background: var(--bg-secondary);
       border-radius: 32px;
-      padding: 40px;
+      padding: 32px 24px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     .logo {
@@ -94,14 +96,16 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 8px;
+      font-weight: 700;
     }
 
     .logo p {
       color: var(--text-muted);
+      font-size: 14px;
     }
 
     .input-group {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     .input-field {
@@ -113,6 +117,7 @@
       color: var(--text-primary);
       font-size: 16px;
       outline: none;
+      transition: border-color 0.2s;
     }
 
     .input-field:focus {
@@ -129,6 +134,10 @@
       cursor: pointer;
       transition: all 0.2s;
       margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
     .btn-primary {
@@ -136,8 +145,9 @@
       color: white;
     }
 
-    .btn-primary:hover {
+    .btn-primary:hover, .btn-primary:active {
       background: #006699;
+      transform: scale(0.98);
     }
 
     .btn-secondary {
@@ -145,8 +155,9 @@
       color: var(--text-primary);
     }
 
-    .btn-secondary:hover {
+    .btn-secondary:hover, .btn-secondary:active {
       background: var(--bg-hover);
+      transform: scale(0.98);
     }
 
     .challenge-area {
@@ -154,6 +165,12 @@
       padding: 20px;
       background: var(--bg-tertiary);
       border-radius: 16px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .challenge-text {
@@ -166,32 +183,51 @@
       font-size: 14px;
     }
 
-    /* Main App */
+    /* MAIN APP */
     .main-app {
       display: flex;
       width: 100%;
       height: 100%;
+      background: var(--bg-secondary);
     }
 
     .main-app.hidden {
       display: none;
     }
 
-    /* Sidebar */
+    /* SIDEBAR - MOBILE FIRST */
     .sidebar {
-      width: 320px;
+      width: 100%;
+      height: 100%;
       background: var(--bg-primary);
-      border-right: 1px solid var(--border-color);
       display: flex;
       flex-direction: column;
+      transition: transform 0.3s ease;
+      position: relative;
+      z-index: 100;
+    }
+
+    .sidebar.hidden {
+      transform: translateX(-100%);
+    }
+
+    /* DESKTOP SIDEBAR */
+    @media (min-width: 768px) {
+      .sidebar {
+        width: 320px;
+        transform: none !important;
+        border-right: 1px solid var(--border-color);
+      }
     }
 
     .sidebar-header {
-      padding: 20px;
+      padding: 20px 16px;
+      padding-top: max(20px, var(--safe-area-top));
       border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
       gap: 12px;
+      background: var(--bg-primary);
     }
 
     .avatar {
@@ -205,6 +241,7 @@
       font-size: 20px;
       font-weight: bold;
       overflow: hidden;
+      flex-shrink: 0;
     }
 
     .avatar img {
@@ -215,11 +252,12 @@
 
     .user-info {
       flex: 1;
-      overflow: hidden;
+      min-width: 0;
     }
 
     .user-name {
       font-weight: 600;
+      font-size: 16px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -228,6 +266,9 @@
     .user-domain {
       font-size: 12px;
       color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .status-dot {
@@ -235,6 +276,7 @@
       height: 10px;
       border-radius: 50%;
       background: var(--online-indicator);
+      flex-shrink: 0;
     }
 
     .status-dot.offline {
@@ -242,9 +284,9 @@
     }
 
     .online-count {
-      padding: 12px 20px;
+      margin: 8px 12px;
+      padding: 12px 16px;
       background: var(--bg-tertiary);
-      margin: 8px;
       border-radius: 12px;
       display: flex;
       align-items: center;
@@ -257,7 +299,7 @@
     }
 
     .search-box {
-      padding: 12px;
+      padding: 8px 12px;
     }
 
     .search-input {
@@ -268,12 +310,18 @@
       border-radius: 24px;
       color: var(--text-primary);
       outline: none;
+      font-size: 14px;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-blue);
     }
 
     .contacts-list {
       flex: 1;
       overflow-y: auto;
-      padding: 8px;
+      padding: 8px 12px;
+      -webkit-overflow-scrolling: touch;
     }
 
     .contact-item {
@@ -281,18 +329,21 @@
       align-items: center;
       gap: 12px;
       padding: 12px;
-      border-radius: 12px;
+      border-radius: 16px;
       cursor: pointer;
       transition: background 0.2s;
-      position: relative;
+      margin-bottom: 4px;
+      background: var(--bg-secondary);
     }
 
-    .contact-item:hover {
+    .contact-item:active {
       background: var(--bg-hover);
+      transform: scale(0.98);
     }
 
     .contact-item.selected {
       background: var(--bg-tertiary);
+      border-left: 3px solid var(--accent-blue);
     }
 
     .contact-avatar {
@@ -304,6 +355,9 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      flex-shrink: 0;
+      font-size: 18px;
+      font-weight: 600;
     }
 
     .contact-avatar img {
@@ -319,9 +373,11 @@
 
     .contact-name {
       font-weight: 600;
+      font-size: 15px;
       display: flex;
       align-items: center;
       gap: 6px;
+      margin-bottom: 4px;
     }
 
     .online-indicator {
@@ -338,39 +394,109 @@
     .contact-domain {
       font-size: 11px;
       color: var(--text-muted);
+      margin-bottom: 4px;
     }
 
     .last-message {
-      font-size: 11px;
+      font-size: 12px;
       color: var(--text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    /* Chat Area */
+    .add-peer-btn {
+      margin: 12px;
+      padding: 14px;
+      background: var(--accent-blue);
+      border: none;
+      border-radius: 16px;
+      color: white;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .add-peer-btn:active {
+      background: #006699;
+      transform: scale(0.98);
+    }
+
+    /* CHAT AREA */
     .chat-area {
-      flex: 1;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-secondary);
       display: flex;
       flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 200;
+    }
+
+    .chat-area.active {
+      transform: translateX(0);
+    }
+
+    @media (min-width: 768px) {
+      .chat-area {
+        position: relative;
+        transform: none;
+        flex: 1;
+      }
     }
 
     .chat-header {
-      padding: 16px 24px;
+      padding: 12px 16px;
+      padding-top: max(12px, var(--safe-area-top));
       border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       background: var(--bg-primary);
+    }
+
+    .back-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      border: none;
+      color: var(--text-primary);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .back-btn:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
+    }
+
+    @media (min-width: 768px) {
+      .back-btn {
+        display: none;
+      }
     }
 
     .chat-contact-info {
       flex: 1;
+      min-width: 0;
     }
 
     .chat-contact-name {
       font-weight: 600;
-      font-size: 18px;
+      font-size: 16px;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -383,7 +509,9 @@
 
     .chat-actions {
       display: flex;
-      gap: 8px;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .chat-action-btn {
@@ -391,35 +519,47 @@
       height: 40px;
       border-radius: 50%;
       border: none;
-      background: transparent;
+      background: var(--bg-tertiary);
       color: var(--text-secondary);
       cursor: pointer;
       font-size: 16px;
       transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
     }
 
-    .chat-action-btn:hover {
-      background: var(--bg-tertiary);
+    .chat-action-btn:active {
+      background: var(--bg-hover);
       color: var(--text-primary);
+      transform: scale(0.95);
     }
 
     .chat-action-btn.active {
       color: var(--accent-blue);
-      background: rgba(0, 136, 204, 0.1);
+      background: rgba(0, 136, 204, 0.2);
     }
 
     .messages-container {
       flex: 1;
       overflow-y: auto;
-      padding: 20px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 8px;
+      -webkit-overflow-scrolling: touch;
     }
 
     .message-wrapper {
       display: flex;
       margin-bottom: 4px;
+      animation: messageSlide 0.2s ease;
+    }
+
+    @keyframes messageSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .message-wrapper.own {
@@ -427,11 +567,14 @@
     }
 
     .message-bubble {
-      max-width: 65%;
-      padding: 10px 16px;
-      border-radius: 18px;
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 20px;
       background: var(--message-incoming);
       word-wrap: break-word;
+      font-size: 14px;
+      line-height: 1.4;
+      position: relative;
     }
 
     .message-wrapper.own .message-bubble {
@@ -455,21 +598,21 @@
       align-items: center;
       gap: 12px;
       padding: 8px;
-      background: rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.1);
       border-radius: 12px;
       cursor: pointer;
     }
 
-    .message-file:hover {
-      background: rgba(255,255,255,0.1);
+    .message-file:active {
+      background: rgba(255,255,255,0.2);
     }
 
     .file-progress {
       width: 100%;
       height: 4px;
-      background: rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.2);
       border-radius: 2px;
-      margin-top: 4px;
+      margin-top: 8px;
     }
 
     .file-progress-fill {
@@ -480,11 +623,12 @@
     }
 
     .input-area {
-      padding: 20px;
+      padding: 12px 16px;
+      padding-bottom: max(12px, var(--safe-area-bottom));
       background: var(--bg-primary);
       border-top: 1px solid var(--border-color);
       display: flex;
-      gap: 12px;
+      gap: 8px;
       align-items: flex-end;
     }
 
@@ -493,120 +637,117 @@
       background: var(--bg-tertiary);
       border-radius: 24px;
       padding: 8px 16px;
+      display: flex;
+      align-items: flex-end;
     }
 
     .message-input {
-      width: 100%;
+      flex: 1;
       background: transparent;
       border: none;
       color: var(--text-primary);
-      font-size: 14px;
+      font-size: 15px;
       padding: 8px 0;
       outline: none;
       resize: none;
       max-height: 120px;
       font-family: inherit;
+      line-height: 1.4;
     }
 
-    /* Video Call Overlay */
-    .video-overlay {
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent-blue);
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .send-btn:active {
+      background: #006699;
+      transform: scale(0.95);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* QR AREA */
+    .qr-area {
+      padding: 16px;
+      background: var(--bg-tertiary);
+      margin: 0 16px 16px;
+      border-radius: 16px;
+      text-align: center;
+      display: none;
+    }
+
+    .qr-area.show {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .qr-container {
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* MODALS */
+    .modal-backdrop {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.95);
+      background: rgba(0,0,0,0.7);
       z-index: 1000;
       display: none;
-      flex-direction: column;
+      backdrop-filter: blur(4px);
     }
 
-    .video-overlay.active {
-      display: flex;
+    .modal-backdrop.active {
+      display: block;
     }
 
-    .video-grid {
-      flex: 1;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      padding: 20px;
-    }
-
-    .video-wrapper {
-      position: relative;
-      background: #000;
-      border-radius: 16px;
-      overflow: hidden;
-    }
-
-    .video-wrapper video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .video-label {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-    }
-
-    .video-controls {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      padding: 20px;
-    }
-
-    .video-control-btn {
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      border: none;
-      background: var(--bg-tertiary);
-      color: white;
-      font-size: 20px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .video-control-btn:hover {
-      transform: scale(1.1);
-    }
-
-    .video-control-btn.danger {
-      background: var(--accent-red);
-    }
-
-    /* Add peer panel */
-    .add-peer-panel {
+    .modal-panel {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 400px;
-      max-width: 90%;
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
       background: var(--bg-secondary);
       border-radius: 32px;
-      padding: 32px;
-      z-index: 1500;
+      padding: 24px;
+      z-index: 1001;
       display: none;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
-    .add-peer-panel.active {
+    .modal-panel.active {
       display: block;
+      animation: slideUp 0.3s ease;
     }
 
     .peer-list-modal {
+      margin: 20px 0;
       max-height: 300px;
       overflow-y: auto;
-      margin: 20px 0;
       border: 1px solid var(--border-color);
       border-radius: 16px;
     }
@@ -620,7 +761,7 @@
       gap: 12px;
     }
 
-    .peer-item:hover {
+    .peer-item:active {
       background: var(--bg-hover);
     }
 
@@ -628,37 +769,129 @@
       border-bottom: none;
     }
 
-    .modal-backdrop {
+    /* VIDEO OVERLAY */
+    .video-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 1499;
+      background: black;
+      z-index: 2000;
       display: none;
+      flex-direction: column;
     }
 
-    .modal-backdrop.active {
-      display: block;
+    .video-overlay.active {
+      display: flex;
     }
 
+    .video-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 4px;
+      padding: 4px;
+      background: black;
+    }
+
+    .video-wrapper {
+      position: relative;
+      background: #1a1a1a;
+      border-radius: 12px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+    }
+
+    .video-wrapper video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .video-label {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    .video-controls {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      padding: 20px;
+      padding-bottom: max(20px, var(--safe-area-bottom));
+      background: rgba(0,0,0,0.8);
+    }
+
+    .video-control-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-control-btn:active {
+      transform: scale(0.9);
+    }
+
+    .video-control-btn.danger {
+      background: var(--accent-red);
+    }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 3000;
+      display: none;
+      animation: toastSlide 0.3s ease;
+      white-space: nowrap;
+    }
+
+    @keyframes toastSlide {
+      from { bottom: 0; opacity: 0; }
+      to { bottom: 30px; opacity: 1; }
+    }
+
+    /* UTILS */
     .hidden {
-      display: none;
+      display: none !important;
     }
   </style>
 </head>
 <body>
-  <!-- Login Screen -->
+  <!-- LOGIN SCREEN -->
   <div id="loginScreen" class="login-screen">
     <div class="login-box">
       <div class="logo">
         <h1>NEBULA</h1>
-        <p>HNS P2P Messenger</p>
+        <p>HNS Messenger</p>
       </div>
       
       <div class="input-group">
-        <input type="text" id="domainInput" class="input-field" placeholder="your-domain.hns" value="alice.hns">
+        <input type="text" id="domainInput" class="input-field" placeholder="your-domain.hns" value="alice.hns" autocomplete="off">
       </div>
       
       <button id="loginBtn" class="btn btn-primary">
@@ -666,9 +899,9 @@
       </button>
       
       <div id="challengeArea" class="challenge-area hidden">
-        <p style="margin-bottom: 8px;">Add this TXT record to your domain:</p>
+        <p style="margin-bottom: 8px;">Add this TXT record:</p>
         <div id="challengeText" class="challenge-text"></div>
-        <button id="verifyBtn" class="btn btn-primary" style="margin-top: 12px;">
+        <button id="verifyBtn" class="btn btn-primary">
           <i class="fas fa-check"></i> I've Added It
         </button>
       </div>
@@ -677,10 +910,10 @@
     </div>
   </div>
 
-  <!-- Main App -->
+  <!-- MAIN APP -->
   <div id="mainApp" class="main-app hidden">
-    <!-- Sidebar -->
-    <div class="sidebar">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="avatar" id="myAvatar">
           <span id="myAvatarText">A</span>
@@ -692,7 +925,6 @@
         <div class="status-dot" id="connectionStatus"></div>
       </div>
       
-      <!-- Online count -->
       <div class="online-count">
         <i class="fas fa-circle"></i>
         <span id="onlineCount">0</span> peers online
@@ -704,16 +936,18 @@
       
       <div class="contacts-list" id="contactsList"></div>
       
-      <div style="padding: 16px;">
-        <button id="showAddPeerBtn" class="btn btn-secondary" style="margin-bottom: 0;">
-          <i class="fas fa-user-plus"></i> Add Peer
-        </button>
-      </div>
+      <button id="showAddPeerBtn" class="add-peer-btn">
+        <i class="fas fa-user-plus"></i> Add Peer
+      </button>
     </div>
-    
-    <!-- Chat Area -->
-    <div class="chat-area">
+
+    <!-- CHAT AREA -->
+    <div class="chat-area" id="chatArea">
       <div class="chat-header">
+        <button class="back-btn" id="backBtn">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        
         <div class="chat-contact-info">
           <div class="chat-contact-name" id="currentChatName">
             Select a contact
@@ -723,76 +957,72 @@
         </div>
         
         <div class="chat-actions">
-          <button class="chat-action-btn" id="viewProfileBtn" title="View Profile">
-            <i class="fas fa-user"></i>
-          </button>
-          <button class="chat-action-btn" id="startAudioCallBtn" title="Voice Call">
+          <button class="chat-action-btn" id="audioCallBtn" title="Voice Call">
             <i class="fas fa-phone"></i>
           </button>
-          <button class="chat-action-btn" id="startVideoCallBtn" title="Video Call">
+          <button class="chat-action-btn" id="videoCallBtn" title="Video Call">
             <i class="fas fa-video"></i>
           </button>
-          <button class="chat-action-btn" id="attachFileBtn" title="Attach File">
+          <button class="chat-action-btn" id="attachBtn" title="Attach File">
             <i class="fas fa-paperclip"></i>
           </button>
-          <button class="chat-action-btn" id="qrBtn" title="Show My QR">
+          <button class="chat-action-btn" id="qrToggleBtn" title="Show QR">
             <i class="fas fa-qrcode"></i>
           </button>
         </div>
       </div>
       
-      <div class="messages-container" id="messagesContainer"></div>
-      
-      <!-- QR Area (hidden by default) -->
-      <div id="qrArea" style="display: none; padding: 20px; text-align: center; background: var(--bg-tertiary); margin: 0 20px 20px; border-radius: 16px;">
-        <div id="qrcode" style="display: flex; justify-content: center; margin-bottom: 10px;"></div>
-        <p style="color: var(--text-muted);">Scan to connect: <span id="qrPeerId"></span></p>
+      <div class="qr-area" id="qrArea">
+        <div class="qr-container" id="qrcode"></div>
+        <p style="color: var(--text-muted); font-size: 12px;">Scan to connect: <span id="qrPeerId"></span></p>
       </div>
+      
+      <div class="messages-container" id="messagesContainer"></div>
       
       <div class="input-area">
         <div class="input-wrapper">
           <textarea id="messageInput" class="message-input" placeholder="Type a message..." rows="1"></textarea>
         </div>
-        <button class="chat-action-btn" id="sendBtn" style="background: var(--accent-blue); color: white;">
+        <button class="send-btn" id="sendBtn" disabled>
           <i class="fas fa-paper-plane"></i>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Add Peer Modal -->
+  <!-- ADD PEER MODAL -->
   <div class="modal-backdrop" id="modalBackdrop"></div>
-  <div class="add-peer-panel" id="addPeerPanel">
+  <div class="modal-panel" id="addPeerModal">
     <h3 style="margin-bottom: 20px;"><i class="fas fa-user-plus"></i> Add Peer</h3>
     
     <div class="input-group">
       <input type="text" id="newPeerDomain" class="input-field" placeholder="bob.hns">
     </div>
     
-    <button id="connectToPeerBtn" class="btn btn-primary" style="margin-bottom: 20px;">
+    <button id="connectToPeerBtn" class="btn btn-primary">
       <i class="fas fa-plug"></i> Connect
     </button>
     
-    <h4 style="margin: 20px 0 10px;">Or select from discovered peers:</h4>
+    <h4 style="margin: 20px 0 10px;">Discovered Peers:</h4>
     <div class="peer-list-modal" id="discoveredPeersList">
       <div class="peer-item">
-        <i class="fas fa-spinner fa-spin"></i> Scanning network...
+        <i class="fas fa-spinner fa-spin"></i> Scanning...
       </div>
     </div>
     
-    <button id="closeAddPeerBtn" class="btn btn-secondary" style="margin-bottom: 0;">
+    <button id="closeModalBtn" class="btn btn-secondary" style="margin-top: 16px;">
       Close
     </button>
   </div>
 
-  <!-- Video Call Overlay -->
+  <!-- VIDEO CALL OVERLAY -->
   <div class="video-overlay" id="videoOverlay">
     <div class="video-grid" id="videoGrid"></div>
     <div class="video-controls">
       <button class="video-control-btn" id="toggleMicBtn">
         <i class="fas fa-microphone"></i>
       </button>
-      <button class="video-control-btn" id="toggleCameraBtn">
+      <button class="video-control-btn" id="toggleCamBtn">
         <i class="fas fa-video"></i>
       </button>
       <button class="video-control-btn danger" id="endCallBtn">
@@ -801,25 +1031,31 @@
     </div>
   </div>
 
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
   <script>
     // Configuration
-    const ENCRYPTION_KEY = 'nebula-secret-key-2024';
-    const DEFAULT_AVATAR = 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y';
-    
+    const STUN_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' }
+    ];
+
     // State
     let peer = null;
     let myDomain = '';
     let myProfile = null;
     let currentChallenge = '';
-    let connections = new Map(); // domain -> {conn, channel, stream}
+    let connections = new Map(); // domain -> {conn, dataChannel}
+    let mediaCalls = new Map(); // domain -> media call
     let contacts = new Map(); // domain -> profile
     let messages = new Map(); // domain -> message array
     let selectedContact = null;
     let localStream = null;
-    let mediaCalls = new Map(); // domain -> media call
-    let fileTransfers = new Map(); // transferId -> transfer info
-    let discoveredPeers = new Set(); // domains we've seen
-    
+    let fileTransfers = new Map();
+    let discoveredPeers = new Set();
+
     // DOM Elements
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
@@ -844,36 +1080,45 @@
     const currentChatName = document.getElementById('currentChatName');
     const currentChatDomain = document.getElementById('currentChatDomain');
     const currentChatStatus = document.getElementById('currentChatStatus');
-    
-    const viewProfileBtn = document.getElementById('viewProfileBtn');
-    const startAudioCallBtn = document.getElementById('startAudioCallBtn');
-    const startVideoCallBtn = document.getElementById('startVideoCallBtn');
-    const attachFileBtn = document.getElementById('attachFileBtn');
-    const qrBtn = document.getElementById('qrBtn');
+    const backBtn = document.getElementById('backBtn');
+    const audioCallBtn = document.getElementById('audioCallBtn');
+    const videoCallBtn = document.getElementById('videoCallBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const qrToggleBtn = document.getElementById('qrToggleBtn');
     const qrArea = document.getElementById('qrArea');
     const qrcode = document.getElementById('qrcode');
     const qrPeerId = document.getElementById('qrPeerId');
     
     const showAddPeerBtn = document.getElementById('showAddPeerBtn');
-    const addPeerPanel = document.getElementById('addPeerPanel');
+    const addPeerModal = document.getElementById('addPeerModal');
     const modalBackdrop = document.getElementById('modalBackdrop');
     const newPeerDomain = document.getElementById('newPeerDomain');
     const connectToPeerBtn = document.getElementById('connectToPeerBtn');
     const discoveredPeersList = document.getElementById('discoveredPeersList');
-    const closeAddPeerBtn = document.getElementById('closeAddPeerBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
     
     const videoOverlay = document.getElementById('videoOverlay');
     const videoGrid = document.getElementById('videoGrid');
     const toggleMicBtn = document.getElementById('toggleMicBtn');
-    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+    const toggleCamBtn = document.getElementById('toggleCamBtn');
     const endCallBtn = document.getElementById('endCallBtn');
+    
+    const toast = document.getElementById('toast');
+
+    // Show toast message
+    function showToast(message, duration = 2000) {
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, duration);
+    }
 
     // DNS TXT lookup
     async function fetchTXTRecords(domain) {
       try {
         const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
         const data = await response.json();
-        
         if (data.Answer && data.Answer.length > 0) {
           return data.Answer
             .filter(record => record.type === 16)
@@ -881,45 +1126,25 @@
         }
         return [];
       } catch (e) {
-        console.error('DNS fetch error:', e);
+        console.error('DNS error:', e);
         return [];
       }
     }
 
-    // Parse profile from TXT records
+    // Parse profile
     function parseProfile(domain, records) {
       const profile = {
         domain: domain,
         name: domain.split('.')[0],
         avatar: null,
-        bio: '',
-        links: [],
-        wallets: []
+        bio: ''
       };
-      
       records.forEach(record => {
-        const [key, ...valueParts] = record.split(':');
-        const value = valueParts.join(':');
-        
-        switch(key) {
-          case 'name': profile.name = value; break;
-          case 'pfp': profile.avatar = `https://${value}`; break;
-          case 'bio': profile.bio = value; break;
-          case 'x':
-            profile.links.push({ type: 'x', url: `https://x.com/${value}`, icon: 'fab fa-x-twitter' });
-            break;
-          case 'gh':
-            profile.links.push({ type: 'gh', url: `https://github.com/${value}`, icon: 'fab fa-github' });
-            break;
-          case 'btc':
-            profile.wallets.push({ currency: 'btc', address: value, icon: 'fab fa-bitcoin' });
-            break;
-          case 'eth':
-            profile.wallets.push({ currency: 'eth', address: value, icon: 'fab fa-ethereum' });
-            break;
-        }
+        const [key, value] = record.split(':');
+        if (key === 'name') profile.name = value;
+        if (key === 'pfp') profile.avatar = `https://${value}`;
+        if (key === 'bio') profile.bio = value;
       });
-      
       return profile;
     }
 
@@ -932,7 +1157,7 @@
       currentChallenge = 'hnschat-' + Math.random().toString(36).substring(2, 10);
       challengeText.textContent = currentChallenge;
       challengeArea.classList.remove('hidden');
-      loginStatus.textContent = 'Add this TXT record to your domain, then click verify';
+      loginStatus.textContent = 'Add this TXT record to your domain';
       
       localStorage.setItem('nebula-domain', myDomain);
       localStorage.setItem('nebula-challenge', currentChallenge);
@@ -943,13 +1168,10 @@
       const txts = await fetchTXTRecords(myDomain);
       
       if (txts.includes(currentChallenge)) {
-        loginStatus.textContent = '✅ Domain verified! Starting peer...';
-        
-        // Load own profile
+        loginStatus.textContent = '✅ Verified! Loading...';
         const records = await fetchTXTRecords(myDomain);
         myProfile = parseProfile(myDomain, records);
         
-        // Update UI
         myName.textContent = myProfile.name;
         myDomainEl.textContent = `@${myDomain}`;
         if (myProfile.avatar) {
@@ -958,59 +1180,46 @@
           myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
         }
         
-        // Start PeerJS
         startPeer();
       } else {
-        loginStatus.textContent = '❌ Challenge not found. Make sure you added the TXT record.';
+        loginStatus.textContent = '❌ Challenge not found';
       }
     });
 
-    // Start PeerJS (handles signaling automatically!)
+    // Start PeerJS
     function startPeer() {
       try {
-        peer = new Peer(myDomain);
+        peer = new Peer(myDomain, {
+          config: { iceServers: STUN_SERVERS }
+        });
         
-        peer.on('open', (id) => {
+        peer.on('open', () => {
           loginScreen.classList.add('hidden');
           mainApp.classList.remove('hidden');
           connectionStatus.classList.remove('offline');
+          showToast('Ready to connect!');
           
-          // Show QR code
+          // Generate QR
           qrcode.innerHTML = '';
           new QRCode(qrcode, {
-            text: id,
+            text: myDomain,
             width: 200,
             height: 200
           });
-          qrPeerId.textContent = id;
+          qrPeerId.textContent = myDomain;
           
-          // Start peer discovery
-          startPeerDiscovery();
+          startDiscovery();
         });
         
-        peer.on('connection', (conn) => {
-          setupConnection(conn);
-        });
-        
-        peer.on('call', (call) => {
-          if (localStream) {
-            call.answer(localStream);
-            setupMediaCall(call);
-          }
-        });
-        
+        peer.on('connection', (conn) => setupConnection(conn));
+        peer.on('call', (call) => handleIncomingCall(call));
         peer.on('error', (err) => {
           console.error('Peer error:', err);
-          if (err.type === 'unavailable-id') {
-            alert('This domain is already in use. Try a different one.');
-          }
+          showToast('Connection error');
         });
-        
         peer.on('disconnected', () => {
           connectionStatus.classList.add('offline');
-          setTimeout(() => {
-            peer.reconnect();
-          }, 5000);
+          showToast('Disconnected');
         });
         
       } catch (e) {
@@ -1022,65 +1231,50 @@
     function setupConnection(conn) {
       const peerId = conn.peer;
       
-      // Store connection
       connections.set(peerId, { conn });
       
-      // Fetch peer's profile
+      // Fetch profile
       fetchTXTRecords(peerId).then(records => {
         const profile = parseProfile(peerId, records);
         contacts.set(peerId, { ...profile, online: true });
         discoveredPeers.add(peerId);
         updateContactsList();
         updateOnlineCount();
-      });
-      
-      conn.on('open', () => {
-        // Send our profile
-        conn.send(JSON.stringify({
-          type: 'profile',
-          profile: myProfile
-        }));
+        showToast(`Connected to ${profile.name}`);
       });
       
       conn.on('data', (data) => {
         if (typeof data !== 'string') return;
         
-        // Try to parse as JSON
         try {
           const obj = JSON.parse(data);
-          
           if (obj.type === 'profile') {
-            // Store peer's profile
             contacts.set(peerId, { ...obj.profile, online: true });
-            discoveredPeers.add(peerId);
             updateContactsList();
-            updateOnlineCount();
             return;
           }
-          
           if (obj.type === 'file-info') {
             handleFileInfo(peerId, obj);
             return;
           }
-          
           if (obj.type === 'file-chunk') {
             handleFileChunk(peerId, obj);
             return;
           }
         } catch (e) {
-          // Not JSON, treat as text message
+          // Text message
+          const message = {
+            type: 'text',
+            text: data,
+            from: peerId,
+            to: myDomain,
+            timestamp: Date.now()
+          };
+          addMessage(peerId, message);
+          if (selectedContact !== peerId) {
+            showToast(`New message from ${peerId}`);
+          }
         }
-        
-        // Text message
-        const message = {
-          type: 'text',
-          text: data,
-          from: peerId,
-          to: myDomain,
-          timestamp: Date.now()
-        };
-        
-        addMessage(peerId, message);
       });
       
       conn.on('close', () => {
@@ -1090,10 +1284,39 @@
           contacts.set(peerId, contact);
         }
         connections.delete(peerId);
-        mediaCalls.delete(peerId);
         updateContactsList();
         updateOnlineCount();
+        if (selectedContact === peerId) {
+          currentChatStatus.className = 'online-indicator offline';
+        }
       });
+      
+      // Send our profile
+      conn.send(JSON.stringify({
+        type: 'profile',
+        profile: myProfile
+      }));
+    }
+
+    // Handle incoming call
+    function handleIncomingCall(call) {
+      if (!localStream) {
+        // Auto-answer with audio/video based on call type
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          .then(stream => {
+            localStream = stream;
+            call.answer(stream);
+            setupMediaCall(call);
+            showLocalVideo();
+          })
+          .catch(err => {
+            console.error('Failed to get media:', err);
+            call.close();
+          });
+      } else {
+        call.answer(localStream);
+        setupMediaCall(call);
+      }
     }
 
     // Setup media call
@@ -1103,215 +1326,23 @@
       call.on('stream', (remoteStream) => {
         mediaCalls.set(peerId, { call, stream: remoteStream });
         showRemoteVideo(peerId, remoteStream);
+        showToast('Call connected');
       });
       
       call.on('close', () => {
         const videoEl = document.getElementById(`video-${peerId}`);
         if (videoEl) videoEl.remove();
         mediaCalls.delete(peerId);
-        
         if (videoGrid.children.length === 0) {
           videoOverlay.classList.remove('active');
         }
       });
     }
 
-    // Connect to a peer by domain
-    async function connectToPeer(domain) {
-      if (!domain) return;
-      
-      // Check if already connected
-      if (connections.has(domain)) {
-        selectContact(domain);
-        addPeerPanel.classList.remove('active');
-        modalBackdrop.classList.remove('active');
-        return;
-      }
-      
-      // Try to find peer ID from TXT
-      const txts = await fetchTXTRecords(domain);
-      let peerId = domain;
-      
-      for (let txt of txts) {
-        if (txt.startsWith('hnschat-peer=')) {
-          peerId = txt.split('=')[1];
-          break;
-        }
-      }
-      
-      // Connect via PeerJS
-      const conn = peer.connect(peerId);
-      setupConnection(conn);
-      
-      // Add to contacts if not exists
-      if (!contacts.has(domain)) {
-        contacts.set(domain, {
-          domain: domain,
-          name: domain.split('.')[0],
-          online: true
-        });
-      }
-      
-      // Close modal
-      addPeerPanel.classList.remove('active');
-      modalBackdrop.classList.remove('active');
-      
-      // Select this contact
-      setTimeout(() => selectContact(domain), 1000);
-    }
-
-    // Add message to history
-    function addMessage(domain, message) {
-      if (!messages.has(domain)) {
-        messages.set(domain, []);
-      }
-      messages.get(domain).push(message);
-      
-      if (selectedContact === domain) {
-        displayMessage(message, message.from === myDomain);
-      }
-      
-      updateContactsList();
-    }
-
-    // Display message in UI
-    function displayMessage(message, isOwn) {
-      const wrapper = document.createElement('div');
-      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
-      
-      let content = '';
-      if (message.type === 'text') {
-        content = `<div class="message-bubble">
-          ${message.text}
-          <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
-        </div>`;
-      } else if (message.type === 'file') {
-        content = `<div class="message-bubble">
-          <div class="message-file" onclick="downloadFile('${message.transferId}')">
-            <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
-            <div style="flex:1">
-              <div>${message.fileName}</div>
-              <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
-              ${message.progress ? `
-                <div class="file-progress">
-                  <div class="file-progress-fill" style="width: ${message.progress}%"></div>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-          <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
-        </div>`;
-      }
-      
-      wrapper.innerHTML = content;
-      messagesContainer.appendChild(wrapper);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    // Update contacts list UI
-    function updateContactsList() {
-      contactsList.innerHTML = '';
-      
-      const sortedContacts = Array.from(contacts.values()).sort((a, b) => {
-        if (a.online && !b.online) return -1;
-        if (!a.online && b.online) return 1;
-        return 0;
-      });
-      
-      sortedContacts.forEach(contact => {
-        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
-        const isSelected = selectedContact === contact.domain;
-        
-        const div = document.createElement('div');
-        div.className = `contact-item ${isSelected ? 'selected' : ''}`;
-        div.onclick = () => selectContact(contact.domain);
-        
-        div.innerHTML = `
-          <div class="contact-avatar">
-            ${contact.avatar 
-              ? `<img src="${contact.avatar}" alt="${contact.name}">`
-              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
-            }
-          </div>
-          <div class="contact-details">
-            <div class="contact-name">
-              ${contact.name}
-              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
-            </div>
-            <div class="contact-domain">@${contact.domain}</div>
-            <div class="last-message">${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}</div>
-          </div>
-        `;
-        
-        contactsList.appendChild(div);
-      });
-      
-      // Update discovered peers list
-      updateDiscoveredPeersList();
-    }
-
-    // Update discovered peers list in modal
-    function updateDiscoveredPeersList() {
-      if (discoveredPeers.size === 0) {
-        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered yet</div>';
-        return;
-      }
-      
-      discoveredPeersList.innerHTML = '';
-      Array.from(discoveredPeers).forEach(domain => {
-        if (domain !== myDomain) {
-          const div = document.createElement('div');
-          div.className = 'peer-item';
-          div.onclick = () => {
-            newPeerDomain.value = domain;
-            connectToPeer(domain);
-          };
-          div.innerHTML = `
-            <i class="fas fa-user"></i>
-            <div>
-              <div>${domain}</div>
-              <small style="color: var(--text-muted);">${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}</small>
-            </div>
-          `;
-          discoveredPeersList.appendChild(div);
-        }
-      });
-    }
-
-    // Update online count
-    function updateOnlineCount() {
-      let count = 0;
-      contacts.forEach(contact => {
-        if (contact.online) count++;
-      });
-      onlineCount.textContent = count;
-    }
-
-    // Select contact
-    function selectContact(domain) {
-      selectedContact = domain;
-      const contact = contacts.get(domain);
-      
-      if (contact) {
-        currentChatName.textContent = contact.name;
-        currentChatDomain.textContent = `@${domain}`;
-        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
-        
-        // Load messages
-        messagesContainer.innerHTML = '';
-        const contactMessages = messages.get(domain) || [];
-        contactMessages.forEach(msg => {
-          displayMessage(msg, msg.from === myDomain);
-        });
-        
-        updateContactsList();
-      }
-    }
-
-    // Start audio/video call
+    // Start call
     async function startCall(withVideo = false) {
       if (!selectedContact || !connections.has(selectedContact)) {
-        alert('User is not connected');
+        showToast('User not connected');
         return;
       }
       
@@ -1325,13 +1356,11 @@
         
         const call = peer.call(selectedContact, localStream);
         setupMediaCall(call);
-        
-        // Show local video
         showLocalVideo();
         
       } catch (err) {
         console.error('Call error:', err);
-        alert('Could not start call: ' + err.message);
+        showToast('Could not start call');
       }
     }
 
@@ -1389,9 +1418,7 @@
 
     // End call
     function endCall() {
-      mediaCalls.forEach((data) => {
-        data.call.close();
-      });
+      mediaCalls.forEach(data => data.call.close());
       mediaCalls.clear();
       
       if (localStream) {
@@ -1403,10 +1430,200 @@
       videoOverlay.classList.remove('active');
     }
 
-    // File transfer functions
+    // Connect to peer
+    async function connectToPeer(domain) {
+      if (!domain) return;
+      
+      if (connections.has(domain)) {
+        selectContact(domain);
+        closeModal();
+        return;
+      }
+      
+      showToast(`Connecting to ${domain}...`);
+      
+      const txts = await fetchTXTRecords(domain);
+      let peerId = domain;
+      for (let txt of txts) {
+        if (txt.startsWith('hnschat-peer=')) {
+          peerId = txt.split('=')[1];
+          break;
+        }
+      }
+      
+      const conn = peer.connect(peerId);
+      setupConnection(conn);
+      
+      closeModal();
+    }
+
+    // Add message
+    function addMessage(domain, message) {
+      if (!messages.has(domain)) {
+        messages.set(domain, []);
+      }
+      messages.get(domain).push(message);
+      
+      if (selectedContact === domain) {
+        displayMessage(message, message.from === myDomain);
+      }
+      
+      updateContactsList();
+    }
+
+    // Display message
+    function displayMessage(message, isOwn) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
+      
+      const time = new Date(message.timestamp).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      if (message.type === 'text') {
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            ${message.text}
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      } else if (message.type === 'file') {
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            <div class="message-file" onclick="downloadFile('${message.transferId}')">
+              <i class="fas fa-file" style="font-size: 24px;"></i>
+              <div style="flex:1">
+                <div>${message.fileName}</div>
+                <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
+                ${message.progress ? `
+                  <div class="file-progress">
+                    <div class="file-progress-fill" style="width: ${message.progress}%"></div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      }
+      
+      messagesContainer.appendChild(wrapper);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Select contact
+    function selectContact(domain) {
+      selectedContact = domain;
+      const contact = contacts.get(domain);
+      
+      if (contact) {
+        currentChatName.textContent = contact.name;
+        currentChatDomain.textContent = `@${domain}`;
+        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
+        
+        // Load messages
+        messagesContainer.innerHTML = '';
+        const contactMessages = messages.get(domain) || [];
+        contactMessages.forEach(msg => {
+          displayMessage(msg, msg.from === myDomain);
+        });
+        
+        // Show chat area on mobile
+        document.getElementById('chatArea').classList.add('active');
+        updateContactsList();
+        
+        // Enable send if online
+        sendBtn.disabled = !contact.online;
+      }
+    }
+
+    // Update contacts list
+    function updateContactsList() {
+      contactsList.innerHTML = '';
+      
+      const sorted = Array.from(contacts.values()).sort((a, b) => {
+        if (a.online && !b.online) return -1;
+        if (!a.online && b.online) return 1;
+        return 0;
+      });
+      
+      sorted.forEach(contact => {
+        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
+        const isSelected = selectedContact === contact.domain;
+        
+        const div = document.createElement('div');
+        div.className = `contact-item ${isSelected ? 'selected' : ''}`;
+        div.onclick = () => selectContact(contact.domain);
+        
+        div.innerHTML = `
+          <div class="contact-avatar">
+            ${contact.avatar 
+              ? `<img src="${contact.avatar}" alt="${contact.name}">`
+              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
+            }
+          </div>
+          <div class="contact-details">
+            <div class="contact-name">
+              ${contact.name}
+              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
+            </div>
+            <div class="contact-domain">@${contact.domain}</div>
+            <div class="last-message">
+              ${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}
+            </div>
+          </div>
+        `;
+        
+        contactsList.appendChild(div);
+      });
+      
+      // Update discovered list
+      updateDiscoveredList();
+      updateOnlineCount();
+    }
+
+    // Update discovered peers
+    function updateDiscoveredList() {
+      if (discoveredPeers.size === 0) {
+        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
+        return;
+      }
+      
+      discoveredPeersList.innerHTML = '';
+      Array.from(discoveredPeers).forEach(domain => {
+        if (domain !== myDomain) {
+          const div = document.createElement('div');
+          div.className = 'peer-item';
+          div.onclick = () => {
+            newPeerDomain.value = domain;
+            connectToPeer(domain);
+          };
+          div.innerHTML = `
+            <i class="fas fa-user"></i>
+            <div>
+              <div>${domain}</div>
+              <small style="color: var(--text-muted);">
+                ${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}
+              </small>
+            </div>
+          `;
+          discoveredPeersList.appendChild(div);
+        }
+      });
+    }
+
+    // Update online count
+    function updateOnlineCount() {
+      let count = 0;
+      contacts.forEach(c => { if (c.online) count++; });
+      onlineCount.textContent = count;
+    }
+
+    // File transfer
     async function sendFile(file) {
       if (!selectedContact || !connections.has(selectedContact)) {
-        alert('No connection to peer');
+        showToast('No connection');
         return;
       }
       
@@ -1415,17 +1632,14 @@
       const chunkSize = 16384;
       const totalChunks = Math.ceil(file.size / chunkSize);
       
-      // Send file info
       conn.send(JSON.stringify({
         type: 'file-info',
         transferId,
         name: file.name,
         size: file.size,
-        type: file.type,
         totalChunks
       }));
       
-      // Add to messages
       const message = {
         type: 'file',
         fileName: file.name,
@@ -1439,38 +1653,30 @@
       
       addMessage(selectedContact, message);
       
-      // Read and send chunks
       const reader = new FileReader();
       reader.onload = (e) => {
-        const arrayBuffer = e.target.result;
-        const bytes = new Uint8Array(arrayBuffer);
+        const bytes = new Uint8Array(e.target.result);
         
         for (let i = 0; i < totalChunks; i++) {
           const start = i * chunkSize;
           const end = Math.min(start + chunkSize, file.size);
           const chunk = bytes.slice(start, end);
           
-          // Convert to base64
           let binary = '';
-          chunk.forEach(byte => {
-            binary += String.fromCharCode(byte);
-          });
-          const base64 = btoa(binary);
+          chunk.forEach(byte => binary += String.fromCharCode(byte));
           
           conn.send(JSON.stringify({
             type: 'file-chunk',
             transferId,
             index: i,
-            data: base64
+            data: btoa(binary)
           }));
           
-          // Update progress
           message.progress = Math.round(((i + 1) / totalChunks) * 100);
           
           if (selectedContact) {
             messagesContainer.innerHTML = '';
-            const contactMessages = messages.get(selectedContact) || [];
-            contactMessages.forEach(msg => {
+            (messages.get(selectedContact) || []).forEach(msg => {
               displayMessage(msg, msg.from === myDomain);
             });
           }
@@ -1488,7 +1694,7 @@
         peerId: domain
       });
       
-      const message = {
+      addMessage(domain, {
         type: 'file',
         fileName: info.name,
         fileSize: info.size,
@@ -1497,16 +1703,13 @@
         to: myDomain,
         timestamp: Date.now(),
         progress: 0
-      };
-      
-      addMessage(domain, message);
+      });
     }
 
     function handleFileChunk(domain, chunk) {
       const transfer = fileTransfers.get(chunk.transferId);
       if (!transfer) return;
       
-      // Decode base64
       const binary = atob(chunk.data);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
@@ -1516,24 +1719,18 @@
       transfer.chunks[chunk.index] = bytes;
       transfer.received++;
       
-      // Update progress
       const progress = Math.round((transfer.received / transfer.totalChunks) * 100);
       
-      // Update message
-      const contactMessages = messages.get(domain);
-      const msg = contactMessages.find(m => m.transferId === chunk.transferId);
+      const msgs = messages.get(domain);
+      const msg = msgs?.find(m => m.transferId === chunk.transferId);
       if (msg) {
         msg.progress = progress;
-        
         if (selectedContact === domain) {
           messagesContainer.innerHTML = '';
-          contactMessages.forEach(m => {
-            displayMessage(m, m.from === myDomain);
-          });
+          msgs.forEach(m => displayMessage(m, m.from === myDomain));
         }
       }
       
-      // Check if complete
       if (transfer.received === transfer.totalChunks) {
         completeFileTransfer(chunk.transferId);
       }
@@ -1543,11 +1740,8 @@
       const transfer = fileTransfers.get(transferId);
       if (!transfer) return;
       
-      // Combine chunks
       let totalLength = 0;
-      transfer.chunks.forEach(chunk => {
-        totalLength += chunk.length;
-      });
+      transfer.chunks.forEach(chunk => totalLength += chunk.length);
       
       const combined = new Uint8Array(totalLength);
       let offset = 0;
@@ -1556,31 +1750,25 @@
         offset += chunk.length;
       });
       
-      // Create blob
       const blob = new Blob([combined], { type: transfer.type });
       const url = URL.createObjectURL(blob);
-      
       transfer.blobUrl = url;
       
-      // Update message
-      const contactMessages = messages.get(transfer.peerId);
-      const msg = contactMessages.find(m => m.transferId === transferId);
+      const msgs = messages.get(transfer.peerId);
+      const msg = msgs?.find(m => m.transferId === transferId);
       if (msg) {
         msg.complete = true;
         msg.blobUrl = url;
-        
         if (selectedContact === transfer.peerId) {
           messagesContainer.innerHTML = '';
-          contactMessages.forEach(m => {
-            displayMessage(m, m.from === myDomain);
-          });
+          msgs.forEach(m => displayMessage(m, m.from === myDomain));
         }
       }
     }
 
     window.downloadFile = function(transferId) {
       const transfer = fileTransfers.get(transferId);
-      if (transfer && transfer.blobUrl) {
+      if (transfer?.blobUrl) {
         const a = document.createElement('a');
         a.href = transfer.blobUrl;
         a.download = transfer.name;
@@ -1588,38 +1776,32 @@
       }
     };
 
-    // Helper functions
     function formatFileSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
       return (bytes / 1048576).toFixed(1) + ' MB';
     }
 
-    function getFileIcon(filename) {
-      const ext = filename.split('.').pop().toLowerCase();
-      if (['jpg','jpeg','png','gif'].includes(ext)) return 'fa-file-image';
-      if (['mp4','avi','mov'].includes(ext)) return 'fa-file-video';
-      if (['mp3','wav'].includes(ext)) return 'fa-file-audio';
-      if (['pdf'].includes(ext)) return 'fa-file-pdf';
-      return 'fa-file';
-    }
-
-    // Peer discovery - periodically check known domains
-    function startPeerDiscovery() {
-      // Try to discover common HNS domains
-      const commonDomains = ['bob.hns', 'charlie.hns', 'alice.hns'];
-      
+    // Discovery
+    function startDiscovery() {
+      const common = ['bob.hns', 'charlie.hns', 'alice.hns', 'example.hns'];
       setInterval(() => {
-        commonDomains.forEach(async domain => {
-          if (domain !== myDomain && !connections.has(domain) && !contacts.has(domain)) {
-            const txts = await fetchTXTRecords(domain);
-            if (txts.length > 0) {
+        common.forEach(async domain => {
+          if (domain !== myDomain && !contacts.has(domain)) {
+            const records = await fetchTXTRecords(domain);
+            if (records.length > 0) {
               discoveredPeers.add(domain);
-              updateDiscoveredPeersList();
+              updateDiscoveredList();
             }
           }
         });
       }, 30000);
+    }
+
+    // Close modal
+    function closeModal() {
+      addPeerModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
     }
 
     // Event Listeners
@@ -1630,16 +1812,21 @@
       const conn = connections.get(selectedContact).conn;
       conn.send(text);
       
-      const message = {
+      addMessage(selectedContact, {
         type: 'text',
-        text: text,
+        text,
         from: myDomain,
         to: selectedContact,
         timestamp: Date.now()
-      };
+      });
       
-      addMessage(selectedContact, message);
       messageInput.value = '';
+      messageInput.style.height = 'auto';
+    });
+
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
     });
 
     messageInput.addEventListener('keypress', (e) => {
@@ -1649,15 +1836,14 @@
       }
     });
 
-    messageInput.addEventListener('input', function() {
-      this.style.height = 'auto';
-      this.style.height = (this.scrollHeight) + 'px';
+    backBtn.addEventListener('click', () => {
+      document.getElementById('chatArea').classList.remove('active');
     });
 
-    startAudioCallBtn.addEventListener('click', () => startCall(false));
-    startVideoCallBtn.addEventListener('click', () => startCall(true));
+    audioCallBtn.addEventListener('click', () => startCall(false));
+    videoCallBtn.addEventListener('click', () => startCall(true));
 
-    attachFileBtn.addEventListener('click', () => {
+    attachBtn.addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'file';
       input.multiple = true;
@@ -1667,25 +1853,18 @@
       input.click();
     });
 
-    qrBtn.addEventListener('click', () => {
-      qrArea.style.display = qrArea.style.display === 'none' ? 'block' : 'none';
+    qrToggleBtn.addEventListener('click', () => {
+      qrArea.classList.toggle('show');
     });
 
     showAddPeerBtn.addEventListener('click', () => {
-      addPeerPanel.classList.add('active');
+      addPeerModal.classList.add('active');
       modalBackdrop.classList.add('active');
-      updateDiscoveredPeersList();
+      updateDiscoveredList();
     });
 
-    closeAddPeerBtn.addEventListener('click', () => {
-      addPeerPanel.classList.remove('active');
-      modalBackdrop.classList.remove('active');
-    });
-
-    modalBackdrop.addEventListener('click', () => {
-      addPeerPanel.classList.remove('active');
-      modalBackdrop.classList.remove('active');
-    });
+    closeModalBtn.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', closeModal);
 
     connectToPeerBtn.addEventListener('click', () => {
       connectToPeer(newPeerDomain.value.trim().toLowerCase());
@@ -1701,35 +1880,28 @@
 
     toggleMicBtn.addEventListener('click', () => {
       if (localStream) {
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = !audioTrack.enabled;
-          toggleMicBtn.innerHTML = audioTrack.enabled 
+        const track = localStream.getAudioTracks()[0];
+        if (track) {
+          track.enabled = !track.enabled;
+          toggleMicBtn.innerHTML = track.enabled 
             ? '<i class="fas fa-microphone"></i>' 
             : '<i class="fas fa-microphone-slash"></i>';
         }
       }
     });
 
-    toggleCameraBtn.addEventListener('click', () => {
+    toggleCamBtn.addEventListener('click', () => {
       if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.enabled = !videoTrack.enabled;
-          toggleCameraBtn.innerHTML = videoTrack.enabled 
+        const track = localStream.getVideoTracks()[0];
+        if (track) {
+          track.enabled = !track.enabled;
+          toggleCamBtn.innerHTML = track.enabled 
             ? '<i class="fas fa-video"></i>' 
             : '<i class="fas fa-video-slash"></i>';
         }
       }
     });
 
-    viewProfileBtn.addEventListener('click', () => {
-      if (!selectedContact) return;
-      const contact = contacts.get(selectedContact);
-      alert(`Profile: ${contact.name}\nDomain: @${contact.domain}\nBio: ${contact.bio || 'No bio'}`);
-    });
-
-    // Search
     searchInput.addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase();
       document.querySelectorAll('.contact-item').forEach(item => {
@@ -1740,17 +1912,14 @@
     });
 
     // Load saved domain
-    const savedDomain = localStorage.getItem('nebula-domain');
-    if (savedDomain) {
-      domainInput.value = savedDomain;
-    }
+    const saved = localStorage.getItem('nebula-domain');
+    if (saved) domainInput.value = saved;
 
     // Logout
     window.logout = function() {
       endCall();
       if (peer) peer.destroy();
-      localStorage.removeItem('nebula-domain');
-      localStorage.removeItem('nebula-challenge');
+      localStorage.clear();
       location.reload();
     };
 
@@ -1762,7 +1931,14 @@
     logoutBtn.onclick = window.logout;
     document.querySelector('.chat-actions').appendChild(logoutBtn);
 
-    console.log('NEBULA HNS Messenger ready');
+    // Handle mobile back button
+    window.addEventListener('popstate', () => {
+      if (document.getElementById('chatArea').classList.contains('active')) {
+        document.getElementById('chatArea').classList.remove('active');
+      }
+    });
+
+    console.log('NEBULA ready');
   </script>
 </body>
 </html>
