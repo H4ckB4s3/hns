@@ -127,22 +127,18 @@
       border-color: var(--accent-blue);
     }
 
-    .pin-input-group {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-    }
-
-    .pin-input {
-      flex: 1;
-      padding: 12px;
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      color: var(--text-primary);
-      font-size: 16px;
-      text-align: center;
-      letter-spacing: 4px;
+    .admin-badge {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--accent-purple);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.8;
     }
 
     .btn {
@@ -235,16 +231,16 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.9);
+      background: rgba(0,0,0,0.95);
       z-index: 3000;
-      display: flex;
+      display: none;
       align-items: center;
       justify-content: center;
       padding: 20px;
     }
 
-    .pin-modal.hidden {
-      display: none;
+    .pin-modal.active {
+      display: flex;
     }
 
     .pin-box {
@@ -281,6 +277,7 @@
       font-size: 20px;
       font-weight: bold;
       cursor: pointer;
+      transition: all 0.2s;
     }
 
     .pin-key:active {
@@ -326,6 +323,54 @@
 
     .settings-item:last-child {
       border-bottom: none;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 24px;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .toggle-switch.active {
+      background: var(--accent-blue);
+    }
+
+    .toggle-switch:after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.3s;
+    }
+
+    .toggle-switch.active:after {
+      left: 28px;
+    }
+
+    .pin-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pin-input {
+      flex: 1;
+      padding: 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 16px;
+      text-align: center;
+      letter-spacing: 4px;
     }
 
     .distress-warning {
@@ -432,6 +477,12 @@
       justify-content: center;
       cursor: pointer;
       font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    .settings-icon:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
     }
 
     .online-count {
@@ -1063,16 +1114,6 @@
       color: white;
     }
 
-    .call-btn.video {
-      background: var(--accent-blue);
-      color: white;
-    }
-
-    .call-btn.mute {
-      background: var(--bg-tertiary);
-      color: white;
-    }
-
     /* VIDEO CALL OVERLAY */
     .video-overlay {
       position: fixed;
@@ -1296,21 +1337,8 @@
   <div id="pinModal" class="pin-modal">
     <div class="pin-box">
       <h3><i class="fas fa-lock"></i> Enter PIN</h3>
-      <div class="pin-display" id="pinDisplay"></div>
-      <div class="pin-keypad" id="pinKeypad">
-        <div class="pin-key" data-key="1">1</div>
-        <div class="pin-key" data-key="2">2</div>
-        <div class="pin-key" data-key="3">3</div>
-        <div class="pin-key" data-key="4">4</div>
-        <div class="pin-key" data-key="5">5</div>
-        <div class="pin-key" data-key="6">6</div>
-        <div class="pin-key" data-key="7">7</div>
-        <div class="pin-key" data-key="8">8</div>
-        <div class="pin-key" data-key="9">9</div>
-        <div class="pin-key" data-key="clear">C</div>
-        <div class="pin-key" data-key="0">0</div>
-        <div class="pin-key" data-key="backspace"><i class="fas fa-backspace"></i></div>
-      </div>
+      <div class="pin-display" id="pinDisplay">⚫⚫⚫⚫</div>
+      <div class="pin-keypad" id="pinKeypad"></div>
       <button id="pinCancelBtn" class="btn btn-secondary">Cancel</button>
     </div>
   </div>
@@ -1323,25 +1351,21 @@
       <h4 style="margin-bottom: 12px;">Security</h4>
       <div class="settings-item">
         <span>PIN Protection</span>
-        <div>
-          <input type="checkbox" id="pinToggle">
-        </div>
+        <div class="toggle-switch" id="pinToggle"></div>
       </div>
       <div id="pinSetup" class="hidden">
         <div class="pin-input-group">
-          <input type="password" id="pinCode" class="pin-input" placeholder="Enter PIN" maxlength="4">
+          <input type="password" id="pinCode" class="pin-input" placeholder="Enter 4-digit PIN" maxlength="4" pattern="\d*">
           <button id="savePinBtn" class="btn btn-primary" style="margin: 0; padding: 12px;">Save</button>
         </div>
       </div>
       <div class="settings-item">
         <span>Distress Code</span>
-        <div>
-          <input type="checkbox" id="distressToggle">
-        </div>
+        <div class="toggle-switch" id="distressToggle"></div>
       </div>
       <div id="distressSetup" class="hidden">
         <div class="pin-input-group">
-          <input type="password" id="distressCode" class="pin-input" placeholder="Enter distress code" maxlength="4">
+          <input type="password" id="distressCode" class="pin-input" placeholder="Enter 4-digit code" maxlength="4" pattern="\d*">
           <button id="saveDistressBtn" class="btn btn-danger" style="margin: 0; padding: 12px;">Save</button>
         </div>
         <p class="distress-warning">⚠️ Distress code will DELETE ALL DATA</p>
@@ -1544,11 +1568,11 @@
     let myProfile = null;
     let currentChallenge = '';
     let isAdmin = false;
-    let connections = new Map(); // domain -> {conn, dataChannel}
-    let mediaCalls = new Map(); // domain -> media call
-    let contacts = new Map(); // domain -> profile
-    let pendingRequests = new Map(); // domain -> {type, direction}
-    let messages = new Map(); // domain -> message array
+    let connections = new Map();
+    let mediaCalls = new Map();
+    let contacts = new Map();
+    let pendingRequests = new Map();
+    let messages = new Map();
     let selectedContact = null;
     let localStream = null;
     let fileTransfers = new Map();
@@ -1617,11 +1641,11 @@
     const settingsName = document.getElementById('settingsName');
     const pinToggle = document.getElementById('pinToggle');
     const pinSetup = document.getElementById('pinSetup');
-    const pinCode = document.getElementById('pinCode');
+    const pinCodeInput = document.getElementById('pinCode');
     const savePinBtn = document.getElementById('savePinBtn');
     const distressToggle = document.getElementById('distressToggle');
     const distressSetup = document.getElementById('distressSetup');
-    const distressCode = document.getElementById('distressCode');
+    const distressCodeInput = document.getElementById('distressCode');
     const saveDistressBtn = document.getElementById('saveDistressBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
@@ -1635,7 +1659,7 @@
     const callAvatar = document.getElementById('callAvatar');
     const callAvatarText = document.getElementById('callAvatarText');
     const callStatus = document.getElementById('callStatus');
-    const callTimer = document.getElementById('callTimer');
+    const callTimerEl = document.getElementById('callTimer');
     const callButtons = document.getElementById('callButtons');
     
     const videoOverlay = document.getElementById('videoOverlay');
@@ -1658,10 +1682,8 @@
       }, duration);
     }
 
-    // DNS TXT lookup
     async function fetchTXTRecords(domain) {
       if (ADMIN_USERS[domain]) return [];
-      
       try {
         const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
         const data = await response.json();
@@ -1672,12 +1694,10 @@
         }
         return [];
       } catch (e) {
-        console.error('DNS error:', e);
         return [];
       }
     }
 
-    // Parse profile
     function parseProfile(domain, records, isAdminUser = false) {
       if (isAdminUser) {
         return {
@@ -1688,7 +1708,6 @@
           isAdmin: true
         };
       }
-      
       const profile = {
         domain: domain,
         name: domain.split('.')[0],
@@ -1696,18 +1715,15 @@
         bio: '',
         isAdmin: false
       };
-      
       records.forEach(record => {
         const [key, value] = record.split(':');
         if (key === 'name') profile.name = value;
         if (key === 'pfp') profile.avatar = `https://${value}`;
         if (key === 'bio') profile.bio = value;
       });
-      
       return profile;
     }
 
-    // Save contacts to localStorage
     function saveContacts() {
       const contactsArray = Array.from(contacts.values()).map(c => ({
         domain: c.domain,
@@ -1718,7 +1734,6 @@
       localStorage.setItem('nebula-contacts', JSON.stringify(contactsArray));
     }
 
-    // Load contacts from localStorage
     function loadContacts() {
       const saved = localStorage.getItem('nebula-contacts');
       if (saved) {
@@ -1729,7 +1744,9 @@
       }
     }
 
-    // Check PIN
+    // ============================================
+    // PIN FUNCTIONS - OFF BY DEFAULT
+    // ============================================
     function checkPin() {
       const savedPin = localStorage.getItem('nebula-pin');
       const savedDistress = localStorage.getItem('nebula-distress');
@@ -1738,68 +1755,71 @@
         pinCode = savedPin;
         showPinModal();
       }
-      
       if (savedDistress) {
         distressCode = savedDistress;
       }
     }
 
     function showPinModal() {
-      pinModal.classList.remove('hidden');
+      pinModal.classList.add('active');
       let enteredPin = '';
       pinDisplay.textContent = '⚫⚫⚫⚫';
       
-      const keyHandler = (e) => {
-        const key = e.target.dataset.key;
-        if (key === 'clear') {
-          enteredPin = '';
-        } else if (key === 'backspace') {
-          enteredPin = enteredPin.slice(0, -1);
-        } else if (key.length === 1 && !isNaN(key)) {
-          if (enteredPin.length < 4) {
-            enteredPin += key;
-          }
-        }
+      pinKeypad.innerHTML = '';
+      const keys = ['1','2','3','4','5','6','7','8','9','clear','0','backspace'];
+      
+      keys.forEach(key => {
+        const keyEl = document.createElement('div');
+        keyEl.className = 'pin-key';
+        keyEl.dataset.key = key;
+        if (key === 'clear') keyEl.textContent = 'C';
+        else if (key === 'backspace') keyEl.innerHTML = '<i class="fas fa-backspace"></i>';
+        else keyEl.textContent = key;
         
-        pinDisplay.textContent = '⚫'.repeat(enteredPin.length) + '⚪'.repeat(4 - enteredPin.length);
-        
-        if (enteredPin.length === 4) {
-          if (enteredPin === distressCode) {
-            // Distress code - wipe everything
-            localStorage.clear();
-            showToast('🧹 All data wiped');
-            setTimeout(() => location.reload(), 1000);
-          } else if (enteredPin === pinCode) {
-            pinModal.classList.add('hidden');
-            pinAttempts = 0;
-          } else {
-            pinAttempts++;
-            showToast('Wrong PIN');
+        keyEl.addEventListener('click', () => {
+          if (key === 'clear') {
             enteredPin = '';
-            pinDisplay.textContent = '⚫⚫⚫⚫';
-            
-            if (pinAttempts >= 3) {
-              showToast('Too many attempts');
-              setTimeout(() => location.reload(), 1000);
+          } else if (key === 'backspace') {
+            enteredPin = enteredPin.slice(0, -1);
+          } else if (key.length === 1 && !isNaN(key)) {
+            if (enteredPin.length < 4) enteredPin += key;
+          }
+          
+          pinDisplay.textContent = '⚫'.repeat(enteredPin.length) + '⚪'.repeat(4 - enteredPin.length);
+          
+          if (enteredPin.length === 4) {
+            if (enteredPin === distressCode) {
+              showToast('🧹 Wiping all data...');
+              localStorage.clear();
+              setTimeout(() => location.reload(), 1500);
+            } else if (enteredPin === pinCode) {
+              pinModal.classList.remove('active');
+              pinAttempts = 0;
+            } else {
+              pinAttempts++;
+              showToast(`Wrong PIN (${pinAttempts}/3)`);
+              enteredPin = '';
+              pinDisplay.textContent = '⚫⚫⚫⚫';
+              
+              if (pinAttempts >= 3) {
+                showToast('Too many attempts');
+                setTimeout(() => location.reload(), 1500);
+              }
             }
           }
-        }
+        });
+        
+        pinKeypad.appendChild(keyEl);
+      });
+      
+      pinCancelBtn.onclick = () => {
+        pinModal.classList.remove('active');
       };
-      
-      document.querySelectorAll('.pin-key').forEach(key => {
-        key.addEventListener('click', keyHandler);
-      });
-      
-      pinCancelBtn.addEventListener('click', () => {
-        pinModal.classList.add('hidden');
-      });
     }
 
     // ============================================
     // LOGIN FLOW
     // ============================================
-    
-    // Check for saved login
     function checkSavedLogin() {
       const savedDomain = localStorage.getItem('nebula-domain');
       const savedChallenge = localStorage.getItem('nebula-challenge');
@@ -1822,7 +1842,6 @@
       }
     }
 
-    // Admin login
     function adminLogin() {
       const domain = domainInput.value.trim().toLowerCase();
       if (!ADMIN_USERS[domain]) {
@@ -1847,12 +1866,10 @@
       }
       
       adminBadge.classList.remove('hidden');
-      
       loadContacts();
       startPeer();
     }
 
-    // Watch domain input
     domainInput.addEventListener('input', () => {
       challengeArea.classList.add('hidden');
       loginBtn.style.display = 'block';
@@ -1945,13 +1962,8 @@
           });
           qrPeerId.textContent = myDomain;
           
-          if (isAdmin) {
-            addAdminContacts();
-          }
-          
-          // Connect to saved contacts
+          if (isAdmin) addAdminContacts();
           connectToSavedContacts();
-          
           startDiscovery();
           checkPin();
         });
@@ -1960,32 +1972,23 @@
         peer.on('call', (call) => handleIncomingCall(call));
         
         peer.on('error', (err) => {
-          console.error('Peer error:', err);
-          showToast('Connection error: ' + err.type);
-          
-          if (err.type === 'unavailable-id') {
-            if (isAdmin) {
-              myDomain = myDomain + '-' + Math.random().toString(36).substring(2, 6);
-              startPeer();
-            }
+          showToast('Connection error');
+          if (err.type === 'unavailable-id' && isAdmin) {
+            myDomain = myDomain + '-' + Math.random().toString(36).substring(2, 6);
+            startPeer();
           }
         });
         
         peer.on('disconnected', () => {
           connectionStatus.classList.add('offline');
-          showToast('Disconnected - reconnecting...');
-          setTimeout(() => {
-            peer.reconnect();
-          }, 2000);
+          setTimeout(() => peer.reconnect(), 2000);
         });
         
       } catch (e) {
-        console.error('Failed to start peer:', e);
         showToast('Failed to start');
       }
     }
 
-    // Connect to saved contacts
     function connectToSavedContacts() {
       contacts.forEach((contact, domain) => {
         if (domain !== myDomain && !connections.has(domain)) {
@@ -1997,7 +2000,6 @@
       });
     }
 
-    // Add admin contacts
     function addAdminContacts() {
       Object.keys(ADMIN_USERS).forEach(admin => {
         if (admin !== myDomain && !contacts.has(admin)) {
@@ -2015,28 +2017,20 @@
     }
 
     // ============================================
-    // CONNECTION SETUP - IMPROVED
+    // CONNECTION SETUP
     // ============================================
     function setupConnection(conn) {
       const peerId = conn.peer;
-      
-      // Check if we already have a pending request for this peer
       const isPending = pendingRequests.has(peerId);
       
       conn.on('open', () => {
-        // Send connection request if not already connected
         if (!connections.has(peerId) && !isPending) {
           conn.send(JSON.stringify({
             type: 'connection-request',
             from: myDomain,
             profile: myProfile
           }));
-          
-          // Add to pending
-          pendingRequests.set(peerId, {
-            type: 'outgoing',
-            conn: conn
-          });
+          pendingRequests.set(peerId, { type: 'outgoing', conn: conn });
         }
       });
       
@@ -2050,53 +2044,43 @@
             handleConnectionRequest(peerId, obj, conn);
             return;
           }
-          
           if (obj.type === 'connection-accepted') {
             handleConnectionAccepted(peerId, conn);
             return;
           }
-          
           if (obj.type === 'connection-rejected') {
             handleConnectionRejected(peerId);
             return;
           }
-          
           if (obj.type === 'profile') {
             updateContactProfile(peerId, obj.profile);
             return;
           }
-          
           if (obj.type === 'call-request') {
             handleCallRequest(peerId, obj);
             return;
           }
-          
           if (obj.type === 'call-accepted') {
             handleCallAccepted(peerId, obj);
             return;
           }
-          
           if (obj.type === 'call-rejected') {
             handleCallRejected(peerId);
             return;
           }
-          
           if (obj.type === 'call-end') {
             endCurrentCall();
             return;
           }
-          
           if (obj.type === 'file-info') {
             handleFileInfo(peerId, obj);
             return;
           }
-          
           if (obj.type === 'file-chunk') {
             handleFileChunk(peerId, obj);
             return;
           }
         } catch (e) {
-          // Text message
           if (connections.has(peerId)) {
             const message = {
               type: 'text',
@@ -2106,9 +2090,7 @@
               timestamp: Date.now()
             };
             addMessage(peerId, message);
-            if (selectedContact !== peerId) {
-              showToast(`New message from ${peerId}`);
-            }
+            if (selectedContact !== peerId) showToast(`New message from ${peerId}`);
           }
         }
       });
@@ -2133,20 +2115,15 @@
     }
 
     function handleConnectionRequest(peerId, request, conn) {
-      // Check if already connected
       if (connections.has(peerId)) {
-        conn.send(JSON.stringify({
-          type: 'connection-accepted'
-        }));
+        conn.send(JSON.stringify({ type: 'connection-accepted' }));
         return;
       }
       
-      // Store profile
       if (request.profile) {
         contacts.set(peerId, { ...request.profile, online: false });
       }
       
-      // Add to pending
       pendingRequests.set(peerId, {
         type: 'incoming',
         conn: conn,
@@ -2158,30 +2135,20 @@
     }
 
     function handleConnectionAccepted(peerId, conn) {
-      // Add to connections
       connections.set(peerId, { conn });
-      
-      // Remove from pending
       pendingRequests.delete(peerId);
       
-      // Update contact status
       const contact = contacts.get(peerId);
       if (contact) {
         contact.online = true;
         contacts.set(peerId, contact);
       }
       
-      // Send our profile
-      conn.send(JSON.stringify({
-        type: 'profile',
-        profile: myProfile
-      }));
-      
+      conn.send(JSON.stringify({ type: 'profile', profile: myProfile }));
       updateContactsList();
       updateOnlineCount();
       showToast(`Connected to ${peerId}`);
       
-      // If this is the selected contact, enable send
       if (selectedContact === peerId) {
         currentChatStatus.className = 'online-indicator';
         sendBtn.disabled = false;
@@ -2199,82 +2166,51 @@
       updateContactsList();
     }
 
-    // Accept connection request
-    function acceptConnection(peerId) {
+    window.acceptConnection = function(peerId) {
       const pending = pendingRequests.get(peerId);
       if (!pending) return;
       
-      // Add to connections
       connections.set(peerId, { conn: pending.conn });
+      pending.conn.send(JSON.stringify({ type: 'connection-accepted' }));
       
-      // Send acceptance
-      pending.conn.send(JSON.stringify({
-        type: 'connection-accepted'
-      }));
-      
-      // Update contact status
       const contact = contacts.get(peerId);
       if (contact) {
         contact.online = true;
         contacts.set(peerId, contact);
       }
       
-      // Send our profile
-      pending.conn.send(JSON.stringify({
-        type: 'profile',
-        profile: myProfile
-      }));
-      
-      // Remove from pending
+      pending.conn.send(JSON.stringify({ type: 'profile', profile: myProfile }));
       pendingRequests.delete(peerId);
-      
       updateContactsList();
       updateOnlineCount();
       saveContacts();
       showToast(`Connected to ${peerId}`);
       
-      // If this is the selected contact, enable send
       if (selectedContact === peerId) {
         currentChatStatus.className = 'online-indicator';
         sendBtn.disabled = false;
       }
-    }
+    };
 
-    // Ignore connection request
-    function ignoreConnection(peerId) {
+    window.ignoreConnection = function(peerId) {
       const pending = pendingRequests.get(peerId);
       if (!pending) return;
       
-      pending.conn.send(JSON.stringify({
-        type: 'connection-rejected'
-      }));
-      
+      pending.conn.send(JSON.stringify({ type: 'connection-rejected' }));
       pending.conn.close();
       pendingRequests.delete(peerId);
-      
-      // Remove from contacts if not saved
-      if (!contacts.has(peerId)) {
-        // Don't add to contacts
-      }
-      
       updateContactsList();
       showToast(`Ignored connection from ${peerId}`);
-    }
+    };
 
-    // Delete contact
-    function deleteContact(domain) {
+    window.deleteContact = function(domain) {
       if (confirm(`Remove ${domain} from contacts?`)) {
         contacts.delete(domain);
-        
         if (connections.has(domain)) {
           connections.get(domain).conn.close();
           connections.delete(domain);
         }
-        
-        if (pendingRequests.has(domain)) {
-          pendingRequests.delete(domain);
-        }
-        
+        pendingRequests.delete(domain);
         if (selectedContact === domain) {
           selectedContact = null;
           currentChatName.textContent = 'Select a contact';
@@ -2282,65 +2218,40 @@
           currentChatStatus.className = 'online-indicator offline';
           messagesContainer.innerHTML = '';
         }
-        
         saveContacts();
         updateContactsList();
         updateOnlineCount();
         showToast('Contact removed');
       }
-    }
+    };
 
     // ============================================
-    // CALL HANDLING - IMPROVED
+    // CALL HANDLING
     // ============================================
-    
-    // Start voice call
     function startVoiceCall() {
       if (!selectedContact || !connections.has(selectedContact)) {
         showToast('User not connected');
         return;
       }
-      
       const conn = connections.get(selectedContact).conn;
-      
-      // Send call request
-      conn.send(JSON.stringify({
-        type: 'call-request',
-        from: myDomain,
-        callType: 'audio'
-      }));
-      
-      // Show outgoing call UI
+      conn.send(JSON.stringify({ type: 'call-request', from: myDomain, callType: 'audio' }));
       showCallUI('outgoing', 'audio');
     }
 
-    // Start video call
     function startVideoCall() {
       if (!selectedContact || !connections.has(selectedContact)) {
         showToast('User not connected');
         return;
       }
-      
       const conn = connections.get(selectedContact).conn;
-      
-      // Send call request
-      conn.send(JSON.stringify({
-        type: 'call-request',
-        from: myDomain,
-        callType: 'video'
-      }));
-      
-      // Show outgoing call UI
+      conn.send(JSON.stringify({ type: 'call-request', from: myDomain, callType: 'video' }));
       showCallUI('outgoing', 'video');
     }
 
     function handleCallRequest(peerId, request) {
       const contact = contacts.get(peerId) || { name: peerId };
-      
-      // Show incoming call UI
       callAvatarText.textContent = contact.name.charAt(0).toUpperCase();
       callStatus.textContent = `${contact.name} is calling...`;
-      
       callButtons.innerHTML = `
         <button class="call-btn accept" onclick="acceptCall('${peerId}', '${request.callType}')">
           <i class="fas fa-phone"></i>
@@ -2349,20 +2260,12 @@
           <i class="fas fa-times"></i>
         </button>
       `;
-      
       callOverlay.classList.add('active');
-      
-      // Store call info
-      currentCall = {
-        peerId: peerId,
-        type: request.callType,
-        direction: 'incoming'
-      };
+      currentCall = { peerId: peerId, type: request.callType, direction: 'incoming' };
     }
 
     function handleCallAccepted(peerId, request) {
       callOverlay.classList.remove('active');
-      
       if (request.callType === 'video') {
         startVideoCallMedia(peerId, true);
       } else {
@@ -2378,13 +2281,8 @@
 
     window.acceptCall = function(peerId, callType) {
       callOverlay.classList.remove('active');
-      
       const conn = connections.get(peerId).conn;
-      conn.send(JSON.stringify({
-        type: 'call-accepted',
-        callType: callType
-      }));
-      
+      conn.send(JSON.stringify({ type: 'call-accepted', callType: callType }));
       if (callType === 'video') {
         startVideoCallMedia(peerId, true);
       } else {
@@ -2394,19 +2292,14 @@
 
     window.rejectCall = function(peerId) {
       callOverlay.classList.remove('active');
-      
       const conn = connections.get(peerId).conn;
-      conn.send(JSON.stringify({
-        type: 'call-rejected'
-      }));
-      
+      conn.send(JSON.stringify({ type: 'call-rejected' }));
       currentCall = null;
     };
 
     async function startVideoCallMedia(peerId, withVideo) {
       try {
         showToast('Starting call...');
-        
         const constraints = {
           audio: true,
           video: withVideo ? {
@@ -2417,10 +2310,7 @@
         };
         
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        if (withVideo) {
-          await getCameras();
-        }
+        if (withVideo) await getCameras();
         
         const call = peer.call(peerId, localStream);
         
@@ -2433,12 +2323,8 @@
           }
         });
         
-        call.on('close', () => {
-          endCurrentCall();
-        });
-        
+        call.on('close', () => endCurrentCall());
         call.on('error', (err) => {
-          console.error('Call error:', err);
           showToast('Call failed');
           endCurrentCall();
         });
@@ -2446,7 +2332,6 @@
         if (withVideo) {
           showLocalVideo();
         } else {
-          // Voice call UI
           videoOverlay.classList.add('active');
           videoGrid.innerHTML = '<div style="color: white; text-align: center; padding: 50px;">Voice call in progress...</div>';
           startCallTimer();
@@ -2460,7 +2345,6 @@
         };
         
       } catch (err) {
-        console.error('Failed to start call:', err);
         showToast('Could not access camera/microphone');
         endCurrentCall();
       }
@@ -2468,11 +2352,8 @@
 
     function handleIncomingCall(call) {
       const peerId = call.peer;
-      
-      // Check if we have a pending call acceptance
       if (currentCall && currentCall.peerId === peerId) {
         call.answer(localStream);
-        
         call.on('stream', (remoteStream) => {
           mediaCalls.set(peerId, { call, stream: remoteStream });
           if (currentCall.type === 'video') {
@@ -2481,14 +2362,8 @@
             startCallTimer();
           }
         });
-        
-        call.on('close', () => {
-          endCurrentCall();
-        });
-        
-        if (currentCall.type === 'video') {
-          showLocalVideo();
-        }
+        call.on('close', () => endCurrentCall());
+        if (currentCall.type === 'video') showLocalVideo();
       } else {
         call.close();
       }
@@ -2496,10 +2371,8 @@
 
     function showCallUI(direction, type) {
       const contact = contacts.get(selectedContact) || { name: selectedContact };
-      
       callAvatarText.textContent = contact.name.charAt(0).toUpperCase();
       callStatus.textContent = direction === 'outgoing' ? 'Calling...' : 'Incoming call...';
-      
       if (direction === 'outgoing') {
         callButtons.innerHTML = `
           <button class="call-btn decline" onclick="endCurrentCall()">
@@ -2507,32 +2380,30 @@
           </button>
         `;
       }
-      
       callOverlay.classList.add('active');
     }
 
     function startCallTimer() {
       callStartTime = Date.now();
-      callTimer.textContent = '00:00';
-      
-      callTimer.style.display = 'block';
+      callTimerEl.textContent = '00:00';
+      callTimerEl.style.display = 'block';
       callStatus.style.display = 'none';
       
-      callTimerInterval = setInterval(() => {
+      callTimer = setInterval(() => {
         const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
         const minutes = Math.floor(elapsed / 60);
         const seconds = elapsed % 60;
-        callTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        callTimerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
       }, 1000);
     }
 
     function endCurrentCall() {
-      if (callTimerInterval) {
-        clearInterval(callTimerInterval);
-        callTimerInterval = null;
+      if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
       }
       
-      mediaCalls.forEach((data, domain) => {
+      mediaCalls.forEach((data) => {
         if (data.call) data.call.close();
       });
       mediaCalls.clear();
@@ -2556,22 +2427,18 @@
       
       currentCall = null;
       callStartTime = null;
-      callTimer.textContent = '';
-      callTimer.style.display = 'none';
+      callTimerEl.textContent = '';
+      callTimerEl.style.display = 'none';
       callStatus.style.display = 'block';
     }
 
     window.endCurrentCall = endCurrentCall;
 
-    // Camera functions
     async function getCameras() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         availableCameras = devices.filter(device => device.kind === 'videoinput');
-        
         cameraSelect.innerHTML = '<option value="">📱 Switch Camera</option>';
-        if (availableCameras.length === 0) return;
-        
         availableCameras.forEach((camera, index) => {
           const option = document.createElement('option');
           option.value = camera.deviceId;
@@ -2588,55 +2455,45 @@
 
     function showLocalVideo() {
       videoOverlay.classList.add('active');
-      
       let wrapper = document.getElementById('video-local');
       if (!wrapper) {
         wrapper = document.createElement('div');
         wrapper.className = 'video-wrapper';
         wrapper.id = 'video-local';
-        
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
         video.muted = true;
         video.srcObject = localStream;
-        
         const label = document.createElement('div');
         label.className = 'video-label';
         label.textContent = 'You';
-        
         wrapper.appendChild(video);
         wrapper.appendChild(label);
         videoGrid.appendChild(wrapper);
       }
-      
       updateVideoGridClass();
     }
 
     function showRemoteVideo(domain, stream) {
       videoOverlay.classList.add('active');
-      
       let wrapper = document.getElementById(`video-${domain}`);
       if (!wrapper) {
         wrapper = document.createElement('div');
         wrapper.className = 'video-wrapper';
         wrapper.id = `video-${domain}`;
-        
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsInline = true;
         video.srcObject = stream;
-        
         const contact = contacts.get(domain);
         const label = document.createElement('div');
         label.className = 'video-label';
         label.textContent = contact?.name || domain;
-        
         wrapper.appendChild(video);
         wrapper.appendChild(label);
         videoGrid.appendChild(wrapper);
       }
-      
       updateVideoGridClass();
     }
 
@@ -2652,16 +2509,12 @@
     // ============================================
     // CHAT FUNCTIONS
     // ============================================
-    
-    // Connect to peer
     async function connectToPeer(domain) {
       if (!domain) return;
-      
       if (domain === myDomain) {
         showToast('Cannot connect to yourself');
         return;
       }
-      
       if (connections.has(domain)) {
         selectContact(domain);
         closeModal();
@@ -2669,7 +2522,6 @@
       }
       
       showToast(`Connecting to ${domain}...`);
-      
       const txts = await fetchTXTRecords(domain);
       let peerId = domain;
       for (let txt of txts) {
@@ -2678,36 +2530,22 @@
           break;
         }
       }
-      
       const conn = peer.connect(peerId);
       setupConnection(conn);
-      
       closeModal();
     }
 
-    // Add message
     function addMessage(domain, message) {
-      if (!messages.has(domain)) {
-        messages.set(domain, []);
-      }
+      if (!messages.has(domain)) messages.set(domain, []);
       messages.get(domain).push(message);
-      
-      if (selectedContact === domain) {
-        displayMessage(message, message.from === myDomain);
-      }
-      
+      if (selectedContact === domain) displayMessage(message, message.from === myDomain);
       updateContactsList();
     }
 
-    // Display message
     function displayMessage(message, isOwn) {
       const wrapper = document.createElement('div');
       wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
-      
-      const time = new Date(message.timestamp).toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
+      const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
       if (message.type === 'text') {
         wrapper.innerHTML = `
@@ -2723,7 +2561,6 @@
         } else if (message.fileType?.startsWith('image/')) {
           preview = `<img src="${message.dataUrl}" class="file-preview" alt="preview">`;
         }
-        
         wrapper.innerHTML = `
           <div class="message-bubble">
             <div class="message-file" onclick="downloadFile('${message.transferId}')">
@@ -2748,37 +2585,26 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Select contact
     function selectContact(domain) {
       selectedContact = domain;
       const contact = contacts.get(domain);
-      
       if (contact) {
         currentChatName.innerHTML = `${contact.name} ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}`;
         currentChatDomain.textContent = `@${domain}`;
         currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
         
-        // Load messages
         messagesContainer.innerHTML = '';
         const contactMessages = messages.get(domain) || [];
-        contactMessages.forEach(msg => {
-          displayMessage(msg, msg.from === myDomain);
-        });
+        contactMessages.forEach(msg => displayMessage(msg, msg.from === myDomain));
         
-        // Show chat area on mobile
         document.getElementById('chatArea').classList.add('active');
         updateContactsList();
-        
-        // Enable send if online
         sendBtn.disabled = !contact.online;
       }
     }
 
-    // Update contacts list
     function updateContactsList() {
       contactsList.innerHTML = '';
-      
-      // Sort contacts: online first, then alphabetically
       const sorted = Array.from(contacts.values()).sort((a, b) => {
         if (a.online && !b.online) return -1;
         if (!a.online && b.online) return 1;
@@ -2838,12 +2664,10 @@
         contactsList.appendChild(div);
       });
       
-      // Update discovered list
       updateDiscoveredList();
       updateOnlineCount();
     }
 
-    // Update discovered peers
     function updateDiscoveredList() {
       if (discoveredPeers.size === 0) {
         discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
@@ -2876,25 +2700,23 @@
       });
     }
 
-    // Update online count
     function updateOnlineCount() {
       let count = 0;
       contacts.forEach(c => { if (c.online) count++; });
       onlineCount.textContent = count;
     }
 
-    // Search input handler
+    // ============================================
+    // SEARCH
+    // ============================================
     searchInput.addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase().trim();
-      
-      // Filter contacts
       document.querySelectorAll('.contact-item').forEach(item => {
         const name = item.querySelector('.contact-name').textContent.toLowerCase();
         const domain = item.querySelector('.contact-domain').textContent.toLowerCase();
         item.style.display = (name.includes(term) || domain.includes(term)) ? 'flex' : 'none';
       });
       
-      // Show/hide add button for new domains
       if (term && !contacts.has(term) && term.includes('.')) {
         searchAddBtn.classList.add('visible');
       } else {
@@ -2902,7 +2724,6 @@
       }
     });
 
-    // Search add button
     searchAddBtn.addEventListener('click', () => {
       const domain = searchInput.value.trim().toLowerCase();
       if (domain && !contacts.has(domain)) {
@@ -2913,7 +2734,7 @@
     });
 
     // ============================================
-    // FILE TRANSFER - WITH PREVIEW
+    // FILE TRANSFER
     // ============================================
     async function sendFile(file) {
       if (!selectedContact || !connections.has(selectedContact)) {
@@ -2926,13 +2747,11 @@
       const chunkSize = 16384;
       const totalChunks = Math.ceil(file.size / chunkSize);
       
-      // Generate preview for images
       let preview = null;
       if (file.type.startsWith('image/')) {
         preview = await generateImagePreview(file);
       }
       
-      // Send file info
       conn.send(JSON.stringify({
         type: 'file-info',
         transferId,
@@ -2958,46 +2777,35 @@
       
       addMessage(selectedContact, message);
       
-      // Read and send file
       const reader = new FileReader();
       reader.onload = (e) => {
         const bytes = new Uint8Array(e.target.result);
-        
         for (let i = 0; i < totalChunks; i++) {
           const start = i * chunkSize;
           const end = Math.min(start + chunkSize, file.size);
           const chunk = bytes.slice(start, end);
-          
           let binary = '';
           chunk.forEach(byte => binary += String.fromCharCode(byte));
-          
           conn.send(JSON.stringify({
             type: 'file-chunk',
             transferId,
             index: i,
             data: btoa(binary)
           }));
-          
           message.progress = Math.round(((i + 1) / totalChunks) * 100);
-          
           if (selectedContact) {
             messagesContainer.innerHTML = '';
-            (messages.get(selectedContact) || []).forEach(msg => {
-              displayMessage(msg, msg.from === myDomain);
-            });
+            (messages.get(selectedContact) || []).forEach(msg => displayMessage(msg, msg.from === myDomain));
           }
         }
       };
-      
       reader.readAsArrayBuffer(file);
     }
 
     function generateImagePreview(file) {
       return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-          resolve(e.target.result);
-        };
+        reader.onload = (e) => resolve(e.target.result);
         reader.readAsDataURL(file);
       });
     }
@@ -3009,7 +2817,6 @@
         received: 0,
         peerId: domain
       });
-      
       addMessage(domain, {
         type: 'file',
         fileName: info.name,
@@ -3033,12 +2840,10 @@
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
-      
       transfer.chunks[chunk.index] = bytes;
       transfer.received++;
       
       const progress = Math.round((transfer.received / transfer.totalChunks) * 100);
-      
       const msgs = messages.get(domain);
       const msg = msgs?.find(m => m.transferId === chunk.transferId);
       if (msg) {
@@ -3060,7 +2865,6 @@
       
       let totalLength = 0;
       transfer.chunks.forEach(chunk => totalLength += chunk.length);
-      
       const combined = new Uint8Array(totalLength);
       let offset = 0;
       transfer.chunks.forEach(chunk => {
@@ -3072,13 +2876,10 @@
       const url = URL.createObjectURL(blob);
       transfer.blobUrl = url;
       
-      // Create data URL for images
-      let dataUrl = null;
       if (transfer.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          dataUrl = e.target.result;
-          updateFileMessage(transferId, url, dataUrl);
+          updateFileMessage(transferId, url, e.target.result);
         };
         reader.readAsDataURL(blob);
       } else {
@@ -3089,14 +2890,12 @@
     function updateFileMessage(transferId, blobUrl, dataUrl) {
       const transfer = fileTransfers.get(transferId);
       if (!transfer) return;
-      
       const msgs = messages.get(transfer.peerId);
       const msg = msgs?.find(m => m.transferId === transferId);
       if (msg) {
         msg.complete = true;
         msg.blobUrl = blobUrl;
         msg.dataUrl = dataUrl;
-        
         if (selectedContact === transfer.peerId) {
           messagesContainer.innerHTML = '';
           msgs.forEach(m => displayMessage(m, m.from === myDomain));
@@ -3126,13 +2925,9 @@
       if (['mp4','avi','mov','mkv'].includes(ext)) return 'fa-video';
       if (['mp3','wav','flac'].includes(ext)) return 'fa-music';
       if (['pdf'].includes(ext)) return 'fa-file-pdf';
-      if (['doc','docx'].includes(ext)) return 'fa-file-word';
-      if (['xls','xlsx'].includes(ext)) return 'fa-file-excel';
-      if (['zip','rar','7z'].includes(ext)) return 'fa-file-archive';
       return 'fa-file';
     }
 
-    // Save chat
     function saveChat(domain) {
       const chatMessages = messages.get(domain) || [];
       if (chatMessages.length === 0) {
@@ -3161,7 +2956,6 @@
       a.href = url;
       a.download = `chat-${domain}-${new Date().toISOString().slice(0,10)}.txt`;
       a.click();
-      
       showToast('Chat saved');
     }
 
@@ -3170,7 +2964,6 @@
     // ============================================
     function startDiscovery() {
       const common = ['bob.hns', 'charlie.hns', 'alice.hns', 'example.hns', ...Object.keys(ADMIN_USERS)];
-      
       setInterval(() => {
         common.forEach(async domain => {
           if (domain !== myDomain && !contacts.has(domain) && !connections.has(domain)) {
@@ -3193,65 +2986,92 @@
     }
 
     // ============================================
-    // SETTINGS
+    // SETTINGS - PIN OFF BY DEFAULT
     // ============================================
-    settingsBtn.addEventListener('click', () => {
-      settingsDomain.textContent = `@${myDomain}`;
-      settingsName.textContent = myProfile?.name || myDomain;
-      
+    function initToggles() {
       const savedPin = localStorage.getItem('nebula-pin');
       const savedDistress = localStorage.getItem('nebula-distress');
       
-      pinToggle.checked = !!savedPin;
-      distressToggle.checked = !!savedDistress;
-      
-      if (savedPin) pinSetup.classList.remove('hidden');
-      if (savedDistress) distressSetup.classList.remove('hidden');
-      
-      settingsModal.classList.add('active');
-      modalBackdrop.classList.add('active');
-    });
-
-    pinToggle.addEventListener('change', (e) => {
-      if (e.target.checked) {
+      if (savedPin) {
+        pinToggle.classList.add('active');
         pinSetup.classList.remove('hidden');
+        pinCode = savedPin;
       } else {
+        pinToggle.classList.remove('active');
+        pinSetup.classList.add('hidden');
+      }
+      
+      if (savedDistress) {
+        distressToggle.classList.add('active');
+        distressSetup.classList.remove('hidden');
+        distressCode = savedDistress;
+      } else {
+        distressToggle.classList.remove('active');
+        distressSetup.classList.add('hidden');
+      }
+    }
+
+    pinToggle.addEventListener('click', () => {
+      if (pinToggle.classList.contains('active')) {
+        pinToggle.classList.remove('active');
         pinSetup.classList.add('hidden');
         localStorage.removeItem('nebula-pin');
         pinCode = null;
+        showToast('PIN disabled');
+      } else {
+        pinToggle.classList.add('active');
+        pinSetup.classList.remove('hidden');
       }
     });
 
     savePinBtn.addEventListener('click', () => {
-      const pin = document.getElementById('pinCode').value;
+      const pin = pinCodeInput.value;
       if (pin.length === 4 && /^\d+$/.test(pin)) {
         localStorage.setItem('nebula-pin', pin);
         pinCode = pin;
         showToast('PIN saved');
+        pinCodeInput.value = '';
       } else {
         showToast('PIN must be 4 digits');
       }
     });
 
-    distressToggle.addEventListener('change', (e) => {
-      if (e.target.checked) {
-        distressSetup.classList.remove('hidden');
-      } else {
+    distressToggle.addEventListener('click', () => {
+      if (distressToggle.classList.contains('active')) {
+        distressToggle.classList.remove('active');
         distressSetup.classList.add('hidden');
         localStorage.removeItem('nebula-distress');
         distressCode = null;
+        showToast('Distress code disabled');
+      } else {
+        distressToggle.classList.add('active');
+        distressSetup.classList.remove('hidden');
       }
     });
 
     saveDistressBtn.addEventListener('click', () => {
-      const code = document.getElementById('distressCode').value;
+      const code = distressCodeInput.value;
       if (code.length === 4 && /^\d+$/.test(code)) {
         localStorage.setItem('nebula-distress', code);
         distressCode = code;
         showToast('Distress code saved');
+        distressCodeInput.value = '';
       } else {
         showToast('Code must be 4 digits');
       }
+    });
+
+    settingsBtn.addEventListener('click', () => {
+      settingsDomain.textContent = `@${myDomain}`;
+      settingsName.textContent = myProfile?.name || myDomain;
+      initToggles();
+      settingsModal.classList.add('active');
+      modalBackdrop.classList.add('active');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
     });
 
     logoutBtn.addEventListener('click', () => {
@@ -3261,28 +3081,18 @@
         localStorage.removeItem('nebula-domain');
         localStorage.removeItem('nebula-challenge');
         localStorage.removeItem('nebula-isAdmin');
-        // Keep contacts, PIN, distress
         location.reload();
       }
-    });
-
-    closeSettingsBtn.addEventListener('click', () => {
-      settingsModal.classList.remove('active');
-      modalBackdrop.classList.remove('active');
     });
 
     // ============================================
     // EVENT LISTENERS
     // ============================================
-    
-    // Send message
     sendBtn.addEventListener('click', () => {
       const text = messageInput.value.trim();
       if (!text || !selectedContact || !connections.has(selectedContact)) return;
-      
       const conn = connections.get(selectedContact).conn;
       conn.send(text);
-      
       addMessage(selectedContact, {
         type: 'text',
         text,
@@ -3290,18 +3100,15 @@
         to: selectedContact,
         timestamp: Date.now()
       });
-      
       messageInput.value = '';
       messageInput.style.height = 'auto';
     });
 
-    // Auto-resize textarea
     messageInput.addEventListener('input', function() {
       this.style.height = 'auto';
       this.style.height = (this.scrollHeight) + 'px';
     });
 
-    // Enter to send
     messageInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -3309,27 +3116,13 @@
       }
     });
 
-    // Back button
     backBtn.addEventListener('click', () => {
       document.getElementById('chatArea').classList.remove('active');
     });
 
-    // Contact info click
-    contactInfoBtn.addEventListener('click', () => {
-      if (selectedContact) {
-        // Show contact info
-        const contact = contacts.get(selectedContact);
-        if (contact) {
-          showToast(`${contact.name} (@${selectedContact})`);
-        }
-      }
-    });
-
-    // Call buttons
     audioCallBtn.addEventListener('click', startVoiceCall);
     videoCallBtn.addEventListener('click', startVideoCall);
 
-    // Attach file
     attachBtn.addEventListener('click', () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -3341,30 +3134,23 @@
       input.click();
     });
 
-    // Toggle QR
     qrToggleBtn.addEventListener('click', () => {
       qrArea.classList.toggle('show');
     });
 
-    // Save chat
     saveChatBtn.addEventListener('click', () => {
-      if (selectedContact) {
-        saveChat(selectedContact);
-      }
+      if (selectedContact) saveChat(selectedContact);
     });
 
-    // Show add peer modal
     showAddPeerBtn.addEventListener('click', () => {
       addPeerModal.classList.add('active');
       modalBackdrop.classList.add('active');
       updateDiscoveredList();
     });
 
-    // Close modal
     closeModalBtn.addEventListener('click', closeModal);
     modalBackdrop.addEventListener('click', closeModal);
 
-    // Connect to peer
     connectToPeerBtn.addEventListener('click', () => {
       connectToPeer(newPeerDomain.value.trim().toLowerCase());
     });
@@ -3375,7 +3161,6 @@
       }
     });
 
-    // Video call controls
     toggleMicBtn.addEventListener('click', () => {
       if (localStream) {
         const track = localStream.getAudioTracks()[0];
@@ -3404,7 +3189,6 @@
 
     cameraSelect.addEventListener('change', async (e) => {
       if (!localStream) return;
-      
       const deviceId = e.target.value;
       if (!deviceId) return;
       
@@ -3437,19 +3221,17 @@
         
         showToast('Camera switched');
       } catch (err) {
-        console.error('Failed to switch camera:', err);
         showToast('Failed to switch camera');
       }
     });
 
-    // Handle mobile back button
     window.addEventListener('popstate', () => {
       if (document.getElementById('chatArea').classList.contains('active')) {
         document.getElementById('chatArea').classList.remove('active');
       }
     });
 
-    // Make functions global for onclick handlers
+    // Make functions global
     window.acceptConnection = acceptConnection;
     window.ignoreConnection = ignoreConnection;
     window.deleteContact = deleteContact;
@@ -3460,11 +3242,8 @@
     // ============================================
     // INITIALIZE
     // ============================================
-    
-    // Check for saved login
     checkSavedLogin();
-
-    console.log('NEBULA ready - All features working!');
+    console.log('NEBULA ready - PIN is OFF by default');
   </script>
 </body>
 </html>
