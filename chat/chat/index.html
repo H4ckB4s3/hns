@@ -1,0 +1,3470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NEBULA • HNS</title>
+  <!-- peerjs for WebRTC -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- QR Code -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* RESET & VARIABLES */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg-primary: #0a0c10;
+      --bg-secondary: #1a1e24;
+      --bg-tertiary: #252b33;
+      --bg-hover: #2f3640;
+      --text-primary: #ffffff;
+      --text-secondary: #b0b3b8;
+      --text-muted: #8a8f99;
+      --accent-blue: #0088cc;
+      --accent-green: #25D366;
+      --accent-purple: #6e5be2;
+      --accent-red: #f15a5a;
+      --accent-orange: #f39c12;
+      --border-color: #2f3540;
+      --message-outgoing: #005e99;
+      --message-incoming: #262d36;
+      --online-indicator: #31a24c;
+      --safe-area-top: env(safe-area-inset-top);
+      --safe-area-bottom: env(safe-area-inset-bottom);
+      --request-pending: #f39c12;
+    }
+
+    body {
+      background: var(--bg-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text-primary);
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+    }
+
+    /* LOGIN SCREEN */
+    .login-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .login-screen.hidden {
+      display: none;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 32px 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo h1 {
+      font-size: 48px;
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .logo p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      color: var(--text-primary);
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-field:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .pin-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pin-input {
+      flex: 1;
+      padding: 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 16px;
+      text-align: center;
+      letter-spacing: 4px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .btn-primary:hover, .btn-primary:active {
+      background: #006699;
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover, .btn-secondary:active {
+      background: var(--bg-hover);
+      transform: scale(0.98);
+    }
+
+    .btn-admin {
+      background: var(--accent-purple);
+      color: white;
+    }
+
+    .btn-danger {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    .challenge-area {
+      margin-top: 24px;
+      padding: 20px;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .challenge-text {
+      font-family: monospace;
+      padding: 16px;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      margin: 12px 0;
+      word-break: break-all;
+      font-size: 24px;
+      text-align: center;
+      letter-spacing: 4px;
+    }
+
+    /* MAIN APP */
+    .main-app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-secondary);
+    }
+
+    .main-app.hidden {
+      display: none;
+    }
+
+    /* PIN MODAL */
+    .pin-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 3000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .pin-modal.hidden {
+      display: none;
+    }
+
+    .pin-box {
+      width: 100%;
+      max-width: 350px;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 32px 24px;
+      text-align: center;
+    }
+
+    .pin-display {
+      font-size: 32px;
+      letter-spacing: 8px;
+      margin: 20px 0;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+      font-family: monospace;
+    }
+
+    .pin-keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .pin-key {
+      padding: 20px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .pin-key:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
+    }
+
+    /* SETTINGS MODAL */
+    .settings-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 24px;
+      z-index: 2500;
+      display: none;
+      overflow-y: auto;
+    }
+
+    .settings-modal.active {
+      display: block;
+    }
+
+    .settings-group {
+      margin: 20px 0;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+    }
+
+    .settings-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .settings-item:last-child {
+      border-bottom: none;
+    }
+
+    .distress-warning {
+      color: var(--accent-red);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 100%;
+      height: 100%;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+      position: relative;
+      z-index: 100;
+    }
+
+    .sidebar.hidden {
+      transform: translateX(-100%);
+    }
+
+    @media (min-width: 768px) {
+      .sidebar {
+        width: 350px;
+        transform: none !important;
+        border-right: 1px solid var(--border-color);
+      }
+    }
+
+    .sidebar-header {
+      padding: 20px 16px;
+      padding-top: max(20px, var(--safe-area-top));
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-primary);
+    }
+
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+      overflow: hidden;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-domain {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--online-indicator);
+      flex-shrink: 0;
+    }
+
+    .status-dot.offline {
+      background: #9e9e9e;
+    }
+
+    .settings-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .online-count {
+      margin: 8px 12px;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .online-count i {
+      color: var(--accent-green);
+    }
+
+    .search-box {
+      padding: 8px 12px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 16px;
+      padding-right: 50px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      color: var(--text-primary);
+      outline: none;
+      font-size: 14px;
+    }
+
+    .search-add-btn {
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      border: none;
+      color: white;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .search-add-btn.visible {
+      display: flex;
+    }
+
+    .contacts-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 4px;
+      background: var(--bg-secondary);
+      position: relative;
+    }
+
+    .contact-item:hover, .contact-item:active {
+      background: var(--bg-hover);
+    }
+
+    .contact-item.selected {
+      background: var(--bg-tertiary);
+      border-left: 3px solid var(--accent-blue);
+    }
+
+    .contact-item.pending {
+      border-left: 3px solid var(--accent-orange);
+    }
+
+    .contact-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      font-size: 18px;
+      font-weight: 600;
+      position: relative;
+    }
+
+    .contact-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .contact-avatar .request-badge {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-orange);
+      border: 2px solid var(--bg-secondary);
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .contact-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contact-name {
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .online-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--online-indicator);
+    }
+
+    .online-indicator.offline {
+      background: #9e9e9e;
+    }
+
+    .contact-domain {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .last-message {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .contact-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .contact-item:hover .contact-actions,
+    .contact-item:active .contact-actions {
+      opacity: 1;
+    }
+
+    .contact-action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .contact-action-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .request-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .request-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .request-btn.accept {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .request-btn.ignore {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .add-peer-btn {
+      margin: 12px;
+      padding: 14px;
+      background: var(--accent-blue);
+      border: none;
+      border-radius: 16px;
+      color: white;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .add-peer-btn:active {
+      background: #006699;
+      transform: scale(0.98);
+    }
+
+    /* CHAT AREA */
+    .chat-area {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-secondary);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 200;
+    }
+
+    .chat-area.active {
+      transform: translateX(0);
+    }
+
+    @media (min-width: 768px) {
+      .chat-area {
+        position: relative;
+        transform: none;
+        flex: 1;
+      }
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      padding-top: max(12px, var(--safe-area-top));
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-primary);
+    }
+
+    .back-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      border: none;
+      color: var(--text-primary);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .back-btn:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
+    }
+
+    @media (min-width: 768px) {
+      .back-btn {
+        display: none;
+      }
+    }
+
+    .chat-contact-info {
+      flex: 1;
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    .chat-contact-name {
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chat-contact-domain {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .chat-actions {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chat-action-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .chat-action-btn:active {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      transform: scale(0.95);
+    }
+
+    .chat-action-btn.active {
+      color: var(--accent-blue);
+      background: rgba(0, 136, 204, 0.2);
+    }
+
+    .chat-action-btn.call-active {
+      color: var(--accent-green);
+      background: rgba(37, 211, 102, 0.2);
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .message-wrapper {
+      display: flex;
+      margin-bottom: 4px;
+      animation: messageSlide 0.2s ease;
+    }
+
+    @keyframes messageSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-wrapper.own {
+      justify-content: flex-end;
+    }
+
+    .message-bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      background: var(--message-incoming);
+      word-wrap: break-word;
+      font-size: 14px;
+      line-height: 1.4;
+      position: relative;
+    }
+
+    .message-wrapper.own .message-bubble {
+      background: var(--message-outgoing);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-wrapper:not(.own) .message-bubble {
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .message-file {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      cursor: pointer;
+    }
+
+    .message-file:active {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .file-preview {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+
+    .file-progress {
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      margin-top: 8px;
+    }
+
+    .file-progress-fill {
+      height: 100%;
+      background: var(--accent-blue);
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    .input-area {
+      padding: 12px 16px;
+      padding-bottom: max(12px, var(--safe-area-bottom));
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      background: var(--bg-tertiary);
+      border-radius: 24px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+    }
+
+    .message-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 15px;
+      padding: 8px 0;
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+
+    .attach-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      padding: 0 8px;
+      cursor: pointer;
+    }
+
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent-blue);
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .send-btn:active {
+      background: #006699;
+      transform: scale(0.95);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .save-chat-btn {
+      background: var(--bg-tertiary);
+      border: none;
+      color: var(--text-primary);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 8px;
+    }
+
+    /* QR AREA */
+    .qr-area {
+      padding: 16px;
+      background: var(--bg-tertiary);
+      margin: 0 16px 16px;
+      border-radius: 16px;
+      text-align: center;
+      display: none;
+    }
+
+    .qr-area.show {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .qr-container {
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* CALL OVERLAY */
+    .call-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 2200;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .call-overlay.active {
+      display: flex;
+    }
+
+    .call-info {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .call-avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+    }
+
+    .call-status {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .call-timer {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .call-buttons {
+      display: flex;
+      gap: 20px;
+      margin-top: 30px;
+    }
+
+    .call-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .call-btn.accept {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .call-btn.decline {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    .call-btn.video {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .call-btn.mute {
+      background: var(--bg-tertiary);
+      color: white;
+    }
+
+    /* VIDEO CALL OVERLAY */
+    .video-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: black;
+      z-index: 2300;
+      display: none;
+      flex-direction: column;
+    }
+
+    .video-overlay.active {
+      display: flex;
+    }
+
+    .video-grid {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 2px;
+      background: black;
+      overflow: hidden;
+    }
+
+    .video-grid.has-two {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .video-wrapper {
+      position: relative;
+      background: #1a1a1a;
+      border-radius: 8px;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+
+    .video-wrapper video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .video-label {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      z-index: 10;
+    }
+
+    .video-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      padding: 16px;
+      padding-bottom: max(16px, var(--safe-area-bottom));
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 20;
+    }
+
+    .video-control-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .video-control-btn:active {
+      transform: scale(0.9);
+    }
+
+    .video-control-btn.danger {
+      background: var(--accent-red);
+    }
+
+    .camera-select-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .camera-select {
+      background: var(--bg-tertiary);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 30px;
+      padding: 12px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      padding-right: 40px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      max-width: 180px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Desktop styles */
+    @media (min-width: 768px) {
+      .video-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 10px;
+        padding: 10px;
+      }
+      
+      .video-grid.has-two {
+        display: grid;
+      }
+      
+      .video-wrapper {
+        aspect-ratio: 4/3;
+      }
+    }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 3000;
+      display: none;
+      animation: toastSlide 0.3s ease;
+      white-space: nowrap;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    @keyframes toastSlide {
+      from { bottom: 0; opacity: 0; }
+      to { bottom: 30px; opacity: 1; }
+    }
+
+    /* ADMIN BADGE */
+    .admin-badge-small {
+      background: var(--accent-purple);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 8px;
+      margin-left: 6px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-box">
+      <div class="logo">
+        <h1>NEBULA</h1>
+        <p>HNS Messenger</p>
+      </div>
+      
+      <div class="input-group">
+        <input type="text" id="domainInput" class="input-field" placeholder="your-domain.hns" value="alice.hns" autocomplete="off">
+        <span id="adminBadge" class="admin-badge hidden">ADMIN</span>
+      </div>
+      
+      <button id="loginBtn" class="btn btn-primary">
+        <i class="fas fa-key"></i> Verify Domain
+      </button>
+      
+      <button id="adminLoginBtn" class="btn btn-admin">
+        <i class="fas fa-user-shield"></i> Admin Login (No Verify)
+      </button>
+      
+      <div id="challengeArea" class="challenge-area hidden">
+        <p style="margin-bottom: 8px;">Add this 6-digit code as TXT record:</p>
+        <div id="challengeText" class="challenge-text"></div>
+        <button id="verifyBtn" class="btn btn-primary">
+          <i class="fas fa-check"></i> Verify Now
+        </button>
+        <button id="cancelVerifyBtn" class="btn btn-secondary" style="margin-top: 8px;">
+          Cancel
+        </button>
+      </div>
+      
+      <div id="loginStatus" style="text-align: center; margin-top: 16px; font-size: 14px; color: var(--text-muted);"></div>
+    </div>
+  </div>
+
+  <!-- PIN MODAL -->
+  <div id="pinModal" class="pin-modal">
+    <div class="pin-box">
+      <h3><i class="fas fa-lock"></i> Enter PIN</h3>
+      <div class="pin-display" id="pinDisplay"></div>
+      <div class="pin-keypad" id="pinKeypad">
+        <div class="pin-key" data-key="1">1</div>
+        <div class="pin-key" data-key="2">2</div>
+        <div class="pin-key" data-key="3">3</div>
+        <div class="pin-key" data-key="4">4</div>
+        <div class="pin-key" data-key="5">5</div>
+        <div class="pin-key" data-key="6">6</div>
+        <div class="pin-key" data-key="7">7</div>
+        <div class="pin-key" data-key="8">8</div>
+        <div class="pin-key" data-key="9">9</div>
+        <div class="pin-key" data-key="clear">C</div>
+        <div class="pin-key" data-key="0">0</div>
+        <div class="pin-key" data-key="backspace"><i class="fas fa-backspace"></i></div>
+      </div>
+      <button id="pinCancelBtn" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal" class="settings-modal">
+    <h3 style="margin-bottom: 20px;"><i class="fas fa-cog"></i> Settings</h3>
+    
+    <div class="settings-group">
+      <h4 style="margin-bottom: 12px;">Security</h4>
+      <div class="settings-item">
+        <span>PIN Protection</span>
+        <div>
+          <input type="checkbox" id="pinToggle">
+        </div>
+      </div>
+      <div id="pinSetup" class="hidden">
+        <div class="pin-input-group">
+          <input type="password" id="pinCode" class="pin-input" placeholder="Enter PIN" maxlength="4">
+          <button id="savePinBtn" class="btn btn-primary" style="margin: 0; padding: 12px;">Save</button>
+        </div>
+      </div>
+      <div class="settings-item">
+        <span>Distress Code</span>
+        <div>
+          <input type="checkbox" id="distressToggle">
+        </div>
+      </div>
+      <div id="distressSetup" class="hidden">
+        <div class="pin-input-group">
+          <input type="password" id="distressCode" class="pin-input" placeholder="Enter distress code" maxlength="4">
+          <button id="saveDistressBtn" class="btn btn-danger" style="margin: 0; padding: 12px;">Save</button>
+        </div>
+        <p class="distress-warning">⚠️ Distress code will DELETE ALL DATA</p>
+      </div>
+    </div>
+    
+    <div class="settings-group">
+      <h4 style="margin-bottom: 12px;">Account</h4>
+      <div class="settings-item">
+        <span>Domain</span>
+        <span id="settingsDomain"></span>
+      </div>
+      <div class="settings-item">
+        <span>Name</span>
+        <span id="settingsName"></span>
+      </div>
+      <button id="logoutBtn" class="btn btn-danger" style="margin-top: 12px;">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
+    </div>
+    
+    <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="mainApp" class="main-app hidden">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="avatar" id="myAvatar" onclick="document.getElementById('qrArea').classList.toggle('show')">
+          <span id="myAvatarText">A</span>
+        </div>
+        <div class="user-info">
+          <div class="user-name" id="myName">Loading...</div>
+          <div class="user-domain" id="myDomain"></div>
+        </div>
+        <div class="status-dot" id="connectionStatus"></div>
+        <div class="settings-icon" id="settingsBtn">
+          <i class="fas fa-cog"></i>
+        </div>
+      </div>
+      
+      <div class="online-count">
+        <i class="fas fa-circle"></i>
+        <span id="onlineCount">0</span> peers online
+      </div>
+      
+      <div class="search-box">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search or add domain...">
+        <button id="searchAddBtn" class="search-add-btn">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      
+      <div class="contacts-list" id="contactsList"></div>
+      
+      <button id="showAddPeerBtn" class="add-peer-btn">
+        <i class="fas fa-user-plus"></i> Add New Peer
+      </button>
+    </div>
+
+    <!-- CHAT AREA -->
+    <div class="chat-area" id="chatArea">
+      <div class="chat-header">
+        <button class="back-btn" id="backBtn">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        
+        <div class="chat-contact-info" id="contactInfoBtn">
+          <div class="chat-contact-name" id="currentChatName">
+            Select a contact
+            <span class="online-indicator offline" id="currentChatStatus"></span>
+          </div>
+          <div class="chat-contact-domain" id="currentChatDomain"></div>
+        </div>
+        
+        <div class="chat-actions">
+          <button class="chat-action-btn" id="audioCallBtn" title="Voice Call">
+            <i class="fas fa-phone"></i>
+          </button>
+          <button class="chat-action-btn" id="videoCallBtn" title="Video Call">
+            <i class="fas fa-video"></i>
+          </button>
+          <button class="chat-action-btn" id="qrToggleBtn" title="Show QR">
+            <i class="fas fa-qrcode"></i>
+          </button>
+          <button class="save-chat-btn" id="saveChatBtn">
+            <i class="fas fa-download"></i> Save
+          </button>
+        </div>
+      </div>
+      
+      <div class="qr-area" id="qrArea">
+        <div class="qr-container" id="qrcode"></div>
+        <p style="color: var(--text-muted); font-size: 12px;">Scan to connect: <span id="qrPeerId"></span></p>
+      </div>
+      
+      <div class="messages-container" id="messagesContainer"></div>
+      
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="messageInput" class="message-input" placeholder="Type a message..." rows="1"></textarea>
+          <button class="attach-btn" id="attachBtn">
+            <i class="fas fa-paperclip"></i>
+          </button>
+        </div>
+        <button class="send-btn" id="sendBtn" disabled>
+          <i class="fas fa-arrow-up"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD PEER MODAL -->
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="modal-panel" id="addPeerModal">
+    <h3 style="margin-bottom: 20px;"><i class="fas fa-user-plus"></i> Add Peer</h3>
+    
+    <div class="input-group">
+      <input type="text" id="newPeerDomain" class="input-field" placeholder="bob.hns">
+    </div>
+    
+    <button id="connectToPeerBtn" class="btn btn-primary">
+      <i class="fas fa-plug"></i> Connect
+    </button>
+    
+    <h4 style="margin: 20px 0 10px;">Discovered Peers:</h4>
+    <div class="peer-list-modal" id="discoveredPeersList">
+      <div class="peer-item">
+        <i class="fas fa-spinner fa-spin"></i> Scanning...
+      </div>
+    </div>
+    
+    <button id="closeModalBtn" class="btn btn-secondary" style="margin-top: 16px;">
+      Close
+    </button>
+  </div>
+
+  <!-- CALL OVERLAY -->
+  <div class="call-overlay" id="callOverlay">
+    <div class="call-info">
+      <div class="call-avatar" id="callAvatar">
+        <span id="callAvatarText">?</span>
+      </div>
+      <div class="call-status" id="callStatus">Incoming call...</div>
+      <div class="call-timer" id="callTimer"></div>
+    </div>
+    <div class="call-buttons" id="callButtons"></div>
+  </div>
+
+  <!-- VIDEO CALL OVERLAY -->
+  <div class="video-overlay" id="videoOverlay">
+    <div class="video-grid" id="videoGrid"></div>
+    <div class="video-controls">
+      <div class="camera-select-container">
+        <select id="cameraSelect" class="camera-select">
+          <option value="">📱 Switch Camera</option>
+        </select>
+      </div>
+      <button class="video-control-btn" id="toggleMicBtn">
+        <i class="fas fa-microphone"></i>
+      </button>
+      <button class="video-control-btn" id="toggleCamBtn">
+        <i class="fas fa-video"></i>
+      </button>
+      <button class="video-control-btn danger" id="endCallBtn">
+        <i class="fas fa-phone-slash"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+    const STUN_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
+    ];
+
+    // ============================================
+    // ADMIN USERS - EASY TO REMOVE LATER
+    // ============================================
+    const ADMIN_USERS = {
+      'admin1': { name: 'Admin One', avatar: null },
+      'admin2': { name: 'Admin Two', avatar: null }
+    };
+
+    // ============================================
+    // STATE
+    // ============================================
+    let peer = null;
+    let myDomain = '';
+    let myProfile = null;
+    let currentChallenge = '';
+    let isAdmin = false;
+    let connections = new Map(); // domain -> {conn, dataChannel}
+    let mediaCalls = new Map(); // domain -> media call
+    let contacts = new Map(); // domain -> profile
+    let pendingRequests = new Map(); // domain -> {type, direction}
+    let messages = new Map(); // domain -> message array
+    let selectedContact = null;
+    let localStream = null;
+    let fileTransfers = new Map();
+    let discoveredPeers = new Set();
+    let availableCameras = [];
+    let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    let currentCall = null;
+    let callTimer = null;
+    let callStartTime = null;
+    let pinCode = null;
+    let distressCode = null;
+    let pinAttempts = 0;
+
+    // ============================================
+    // DOM ELEMENTS
+    // ============================================
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    const domainInput = document.getElementById('domainInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const adminLoginBtn = document.getElementById('adminLoginBtn');
+    const adminBadge = document.getElementById('adminBadge');
+    const challengeArea = document.getElementById('challengeArea');
+    const challengeText = document.getElementById('challengeText');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const cancelVerifyBtn = document.getElementById('cancelVerifyBtn');
+    const loginStatus = document.getElementById('loginStatus');
+    
+    const myAvatar = document.getElementById('myAvatar');
+    const myAvatarText = document.getElementById('myAvatarText');
+    const myName = document.getElementById('myName');
+    const myDomainEl = document.getElementById('myDomain');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const onlineCount = document.getElementById('onlineCount');
+    const searchInput = document.getElementById('searchInput');
+    const searchAddBtn = document.getElementById('searchAddBtn');
+    const contactsList = document.getElementById('contactsList');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const currentChatName = document.getElementById('currentChatName');
+    const currentChatDomain = document.getElementById('currentChatDomain');
+    const currentChatStatus = document.getElementById('currentChatStatus');
+    const backBtn = document.getElementById('backBtn');
+    const contactInfoBtn = document.getElementById('contactInfoBtn');
+    const audioCallBtn = document.getElementById('audioCallBtn');
+    const videoCallBtn = document.getElementById('videoCallBtn');
+    const qrToggleBtn = document.getElementById('qrToggleBtn');
+    const saveChatBtn = document.getElementById('saveChatBtn');
+    const qrArea = document.getElementById('qrArea');
+    const qrcode = document.getElementById('qrcode');
+    const qrPeerId = document.getElementById('qrPeerId');
+    
+    const showAddPeerBtn = document.getElementById('showAddPeerBtn');
+    const addPeerModal = document.getElementById('addPeerModal');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const newPeerDomain = document.getElementById('newPeerDomain');
+    const connectToPeerBtn = document.getElementById('connectToPeerBtn');
+    const discoveredPeersList = document.getElementById('discoveredPeersList');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsDomain = document.getElementById('settingsDomain');
+    const settingsName = document.getElementById('settingsName');
+    const pinToggle = document.getElementById('pinToggle');
+    const pinSetup = document.getElementById('pinSetup');
+    const pinCode = document.getElementById('pinCode');
+    const savePinBtn = document.getElementById('savePinBtn');
+    const distressToggle = document.getElementById('distressToggle');
+    const distressSetup = document.getElementById('distressSetup');
+    const distressCode = document.getElementById('distressCode');
+    const saveDistressBtn = document.getElementById('saveDistressBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    
+    const pinModal = document.getElementById('pinModal');
+    const pinDisplay = document.getElementById('pinDisplay');
+    const pinKeypad = document.getElementById('pinKeypad');
+    const pinCancelBtn = document.getElementById('pinCancelBtn');
+    
+    const callOverlay = document.getElementById('callOverlay');
+    const callAvatar = document.getElementById('callAvatar');
+    const callAvatarText = document.getElementById('callAvatarText');
+    const callStatus = document.getElementById('callStatus');
+    const callTimer = document.getElementById('callTimer');
+    const callButtons = document.getElementById('callButtons');
+    
+    const videoOverlay = document.getElementById('videoOverlay');
+    const videoGrid = document.getElementById('videoGrid');
+    const toggleMicBtn = document.getElementById('toggleMicBtn');
+    const toggleCamBtn = document.getElementById('toggleCamBtn');
+    const endCallBtn = document.getElementById('endCallBtn');
+    const cameraSelect = document.getElementById('cameraSelect');
+    
+    const toast = document.getElementById('toast');
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    function showToast(message, duration = 2000) {
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, duration);
+    }
+
+    // DNS TXT lookup
+    async function fetchTXTRecords(domain) {
+      if (ADMIN_USERS[domain]) return [];
+      
+      try {
+        const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
+        const data = await response.json();
+        if (data.Answer && data.Answer.length > 0) {
+          return data.Answer
+            .filter(record => record.type === 16)
+            .map(record => record.data.replace(/"/g, ''));
+        }
+        return [];
+      } catch (e) {
+        console.error('DNS error:', e);
+        return [];
+      }
+    }
+
+    // Parse profile
+    function parseProfile(domain, records, isAdminUser = false) {
+      if (isAdminUser) {
+        return {
+          domain: domain,
+          name: ADMIN_USERS[domain].name,
+          avatar: null,
+          bio: 'Admin User',
+          isAdmin: true
+        };
+      }
+      
+      const profile = {
+        domain: domain,
+        name: domain.split('.')[0],
+        avatar: null,
+        bio: '',
+        isAdmin: false
+      };
+      
+      records.forEach(record => {
+        const [key, value] = record.split(':');
+        if (key === 'name') profile.name = value;
+        if (key === 'pfp') profile.avatar = `https://${value}`;
+        if (key === 'bio') profile.bio = value;
+      });
+      
+      return profile;
+    }
+
+    // Save contacts to localStorage
+    function saveContacts() {
+      const contactsArray = Array.from(contacts.values()).map(c => ({
+        domain: c.domain,
+        name: c.name,
+        avatar: c.avatar,
+        isAdmin: c.isAdmin
+      }));
+      localStorage.setItem('nebula-contacts', JSON.stringify(contactsArray));
+    }
+
+    // Load contacts from localStorage
+    function loadContacts() {
+      const saved = localStorage.getItem('nebula-contacts');
+      if (saved) {
+        const contactsArray = JSON.parse(saved);
+        contactsArray.forEach(c => {
+          contacts.set(c.domain, { ...c, online: false });
+        });
+      }
+    }
+
+    // Check PIN
+    function checkPin() {
+      const savedPin = localStorage.getItem('nebula-pin');
+      const savedDistress = localStorage.getItem('nebula-distress');
+      
+      if (savedPin) {
+        pinCode = savedPin;
+        showPinModal();
+      }
+      
+      if (savedDistress) {
+        distressCode = savedDistress;
+      }
+    }
+
+    function showPinModal() {
+      pinModal.classList.remove('hidden');
+      let enteredPin = '';
+      pinDisplay.textContent = '⚫⚫⚫⚫';
+      
+      const keyHandler = (e) => {
+        const key = e.target.dataset.key;
+        if (key === 'clear') {
+          enteredPin = '';
+        } else if (key === 'backspace') {
+          enteredPin = enteredPin.slice(0, -1);
+        } else if (key.length === 1 && !isNaN(key)) {
+          if (enteredPin.length < 4) {
+            enteredPin += key;
+          }
+        }
+        
+        pinDisplay.textContent = '⚫'.repeat(enteredPin.length) + '⚪'.repeat(4 - enteredPin.length);
+        
+        if (enteredPin.length === 4) {
+          if (enteredPin === distressCode) {
+            // Distress code - wipe everything
+            localStorage.clear();
+            showToast('🧹 All data wiped');
+            setTimeout(() => location.reload(), 1000);
+          } else if (enteredPin === pinCode) {
+            pinModal.classList.add('hidden');
+            pinAttempts = 0;
+          } else {
+            pinAttempts++;
+            showToast('Wrong PIN');
+            enteredPin = '';
+            pinDisplay.textContent = '⚫⚫⚫⚫';
+            
+            if (pinAttempts >= 3) {
+              showToast('Too many attempts');
+              setTimeout(() => location.reload(), 1000);
+            }
+          }
+        }
+      };
+      
+      document.querySelectorAll('.pin-key').forEach(key => {
+        key.addEventListener('click', keyHandler);
+      });
+      
+      pinCancelBtn.addEventListener('click', () => {
+        pinModal.classList.add('hidden');
+      });
+    }
+
+    // ============================================
+    // LOGIN FLOW
+    // ============================================
+    
+    // Check for saved login
+    function checkSavedLogin() {
+      const savedDomain = localStorage.getItem('nebula-domain');
+      const savedChallenge = localStorage.getItem('nebula-challenge');
+      const savedIsAdmin = localStorage.getItem('nebula-isAdmin') === 'true';
+      
+      if (savedDomain && savedChallenge) {
+        domainInput.value = savedDomain;
+        myDomain = savedDomain;
+        currentChallenge = savedChallenge;
+        isAdmin = savedIsAdmin;
+        
+        if (savedIsAdmin) {
+          adminLogin();
+        } else {
+          challengeText.textContent = currentChallenge;
+          challengeArea.classList.remove('hidden');
+          loginBtn.style.display = 'none';
+          loginStatus.textContent = 'Click verify to continue';
+        }
+      }
+    }
+
+    // Admin login
+    function adminLogin() {
+      const domain = domainInput.value.trim().toLowerCase();
+      if (!ADMIN_USERS[domain]) {
+        showToast('Invalid admin user');
+        return;
+      }
+      
+      isAdmin = true;
+      myDomain = domain;
+      myProfile = parseProfile(domain, [], true);
+      
+      localStorage.setItem('nebula-domain', domain);
+      localStorage.setItem('nebula-challenge', 'admin');
+      localStorage.setItem('nebula-isAdmin', 'true');
+      
+      myName.textContent = myProfile.name;
+      myDomainEl.textContent = `@${domain}`;
+      if (myProfile.avatar) {
+        myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+      } else {
+        myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+      }
+      
+      adminBadge.classList.remove('hidden');
+      
+      loadContacts();
+      startPeer();
+    }
+
+    // Watch domain input
+    domainInput.addEventListener('input', () => {
+      challengeArea.classList.add('hidden');
+      loginBtn.style.display = 'block';
+      loginStatus.textContent = '';
+      
+      const domain = domainInput.value.trim().toLowerCase();
+      if (ADMIN_USERS[domain]) {
+        adminBadge.classList.remove('hidden');
+        adminLoginBtn.textContent = `Login as ${ADMIN_USERS[domain].name}`;
+      } else {
+        adminBadge.classList.add('hidden');
+        adminLoginBtn.textContent = 'Admin Login (No Verify)';
+      }
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      const domain = domainInput.value.trim().toLowerCase();
+      if (!domain) return;
+      
+      currentChallenge = Math.floor(100000 + Math.random() * 900000).toString();
+      myDomain = domain;
+      isAdmin = false;
+      
+      challengeText.textContent = currentChallenge;
+      challengeArea.classList.remove('hidden');
+      loginBtn.style.display = 'none';
+      loginStatus.textContent = 'Add this 6-digit code as TXT record to your domain';
+      
+      localStorage.setItem('nebula-domain', myDomain);
+      localStorage.setItem('nebula-challenge', currentChallenge);
+      localStorage.setItem('nebula-isAdmin', 'false');
+    });
+
+    adminLoginBtn.addEventListener('click', adminLogin);
+
+    cancelVerifyBtn.addEventListener('click', () => {
+      challengeArea.classList.add('hidden');
+      loginBtn.style.display = 'block';
+      loginStatus.textContent = '';
+      localStorage.removeItem('nebula-domain');
+      localStorage.removeItem('nebula-challenge');
+      localStorage.removeItem('nebula-isAdmin');
+    });
+
+    verifyBtn.addEventListener('click', async () => {
+      loginStatus.textContent = 'Checking DNS...';
+      const txts = await fetchTXTRecords(myDomain);
+      
+      if (txts.includes(currentChallenge)) {
+        loginStatus.textContent = '✅ Verified! Loading...';
+        const records = await fetchTXTRecords(myDomain);
+        myProfile = parseProfile(myDomain, records);
+        
+        myName.textContent = myProfile.name;
+        myDomainEl.textContent = `@${myDomain}`;
+        if (myProfile.avatar) {
+          myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+        } else {
+          myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+        }
+        
+        adminBadge.classList.add('hidden');
+        loadContacts();
+        startPeer();
+      } else {
+        loginStatus.textContent = '❌ Code not found in DNS records';
+      }
+    });
+
+    // ============================================
+    // PEERJS SETUP
+    // ============================================
+    function startPeer() {
+      try {
+        peer = new Peer(myDomain, {
+          config: { iceServers: STUN_SERVERS }
+        });
+        
+        peer.on('open', () => {
+          loginScreen.classList.add('hidden');
+          mainApp.classList.remove('hidden');
+          connectionStatus.classList.remove('offline');
+          showToast('Ready to connect!');
+          
+          qrcode.innerHTML = '';
+          new QRCode(qrcode, {
+            text: myDomain,
+            width: 200,
+            height: 200
+          });
+          qrPeerId.textContent = myDomain;
+          
+          if (isAdmin) {
+            addAdminContacts();
+          }
+          
+          // Connect to saved contacts
+          connectToSavedContacts();
+          
+          startDiscovery();
+          checkPin();
+        });
+        
+        peer.on('connection', (conn) => setupConnection(conn));
+        peer.on('call', (call) => handleIncomingCall(call));
+        
+        peer.on('error', (err) => {
+          console.error('Peer error:', err);
+          showToast('Connection error: ' + err.type);
+          
+          if (err.type === 'unavailable-id') {
+            if (isAdmin) {
+              myDomain = myDomain + '-' + Math.random().toString(36).substring(2, 6);
+              startPeer();
+            }
+          }
+        });
+        
+        peer.on('disconnected', () => {
+          connectionStatus.classList.add('offline');
+          showToast('Disconnected - reconnecting...');
+          setTimeout(() => {
+            peer.reconnect();
+          }, 2000);
+        });
+        
+      } catch (e) {
+        console.error('Failed to start peer:', e);
+        showToast('Failed to start');
+      }
+    }
+
+    // Connect to saved contacts
+    function connectToSavedContacts() {
+      contacts.forEach((contact, domain) => {
+        if (domain !== myDomain && !connections.has(domain)) {
+          setTimeout(() => {
+            const conn = peer.connect(domain);
+            setupConnection(conn);
+          }, 1000);
+        }
+      });
+    }
+
+    // Add admin contacts
+    function addAdminContacts() {
+      Object.keys(ADMIN_USERS).forEach(admin => {
+        if (admin !== myDomain && !contacts.has(admin)) {
+          contacts.set(admin, {
+            domain: admin,
+            name: ADMIN_USERS[admin].name,
+            avatar: null,
+            isAdmin: true,
+            online: false
+          });
+        }
+      });
+      saveContacts();
+      updateContactsList();
+    }
+
+    // ============================================
+    // CONNECTION SETUP - IMPROVED
+    // ============================================
+    function setupConnection(conn) {
+      const peerId = conn.peer;
+      
+      // Check if we already have a pending request for this peer
+      const isPending = pendingRequests.has(peerId);
+      
+      conn.on('open', () => {
+        // Send connection request if not already connected
+        if (!connections.has(peerId) && !isPending) {
+          conn.send(JSON.stringify({
+            type: 'connection-request',
+            from: myDomain,
+            profile: myProfile
+          }));
+          
+          // Add to pending
+          pendingRequests.set(peerId, {
+            type: 'outgoing',
+            conn: conn
+          });
+        }
+      });
+      
+      conn.on('data', (data) => {
+        if (typeof data !== 'string') return;
+        
+        try {
+          const obj = JSON.parse(data);
+          
+          if (obj.type === 'connection-request') {
+            handleConnectionRequest(peerId, obj, conn);
+            return;
+          }
+          
+          if (obj.type === 'connection-accepted') {
+            handleConnectionAccepted(peerId, conn);
+            return;
+          }
+          
+          if (obj.type === 'connection-rejected') {
+            handleConnectionRejected(peerId);
+            return;
+          }
+          
+          if (obj.type === 'profile') {
+            updateContactProfile(peerId, obj.profile);
+            return;
+          }
+          
+          if (obj.type === 'call-request') {
+            handleCallRequest(peerId, obj);
+            return;
+          }
+          
+          if (obj.type === 'call-accepted') {
+            handleCallAccepted(peerId, obj);
+            return;
+          }
+          
+          if (obj.type === 'call-rejected') {
+            handleCallRejected(peerId);
+            return;
+          }
+          
+          if (obj.type === 'call-end') {
+            endCurrentCall();
+            return;
+          }
+          
+          if (obj.type === 'file-info') {
+            handleFileInfo(peerId, obj);
+            return;
+          }
+          
+          if (obj.type === 'file-chunk') {
+            handleFileChunk(peerId, obj);
+            return;
+          }
+        } catch (e) {
+          // Text message
+          if (connections.has(peerId)) {
+            const message = {
+              type: 'text',
+              text: data,
+              from: peerId,
+              to: myDomain,
+              timestamp: Date.now()
+            };
+            addMessage(peerId, message);
+            if (selectedContact !== peerId) {
+              showToast(`New message from ${peerId}`);
+            }
+          }
+        }
+      });
+      
+      conn.on('close', () => {
+        if (connections.has(peerId)) {
+          const contact = contacts.get(peerId);
+          if (contact) {
+            contact.online = false;
+            contacts.set(peerId, contact);
+          }
+          connections.delete(peerId);
+          updateContactsList();
+          updateOnlineCount();
+          if (selectedContact === peerId) {
+            currentChatStatus.className = 'online-indicator offline';
+            sendBtn.disabled = true;
+          }
+        }
+        pendingRequests.delete(peerId);
+      });
+    }
+
+    function handleConnectionRequest(peerId, request, conn) {
+      // Check if already connected
+      if (connections.has(peerId)) {
+        conn.send(JSON.stringify({
+          type: 'connection-accepted'
+        }));
+        return;
+      }
+      
+      // Store profile
+      if (request.profile) {
+        contacts.set(peerId, { ...request.profile, online: false });
+      }
+      
+      // Add to pending
+      pendingRequests.set(peerId, {
+        type: 'incoming',
+        conn: conn,
+        from: request.from
+      });
+      
+      updateContactsList();
+      showToast(`Connection request from ${request.from}`);
+    }
+
+    function handleConnectionAccepted(peerId, conn) {
+      // Add to connections
+      connections.set(peerId, { conn });
+      
+      // Remove from pending
+      pendingRequests.delete(peerId);
+      
+      // Update contact status
+      const contact = contacts.get(peerId);
+      if (contact) {
+        contact.online = true;
+        contacts.set(peerId, contact);
+      }
+      
+      // Send our profile
+      conn.send(JSON.stringify({
+        type: 'profile',
+        profile: myProfile
+      }));
+      
+      updateContactsList();
+      updateOnlineCount();
+      showToast(`Connected to ${peerId}`);
+      
+      // If this is the selected contact, enable send
+      if (selectedContact === peerId) {
+        currentChatStatus.className = 'online-indicator';
+        sendBtn.disabled = false;
+      }
+    }
+
+    function handleConnectionRejected(peerId) {
+      pendingRequests.delete(peerId);
+      showToast(`Connection request rejected by ${peerId}`);
+      updateContactsList();
+    }
+
+    function updateContactProfile(peerId, profile) {
+      contacts.set(peerId, { ...profile, online: true });
+      updateContactsList();
+    }
+
+    // Accept connection request
+    function acceptConnection(peerId) {
+      const pending = pendingRequests.get(peerId);
+      if (!pending) return;
+      
+      // Add to connections
+      connections.set(peerId, { conn: pending.conn });
+      
+      // Send acceptance
+      pending.conn.send(JSON.stringify({
+        type: 'connection-accepted'
+      }));
+      
+      // Update contact status
+      const contact = contacts.get(peerId);
+      if (contact) {
+        contact.online = true;
+        contacts.set(peerId, contact);
+      }
+      
+      // Send our profile
+      pending.conn.send(JSON.stringify({
+        type: 'profile',
+        profile: myProfile
+      }));
+      
+      // Remove from pending
+      pendingRequests.delete(peerId);
+      
+      updateContactsList();
+      updateOnlineCount();
+      saveContacts();
+      showToast(`Connected to ${peerId}`);
+      
+      // If this is the selected contact, enable send
+      if (selectedContact === peerId) {
+        currentChatStatus.className = 'online-indicator';
+        sendBtn.disabled = false;
+      }
+    }
+
+    // Ignore connection request
+    function ignoreConnection(peerId) {
+      const pending = pendingRequests.get(peerId);
+      if (!pending) return;
+      
+      pending.conn.send(JSON.stringify({
+        type: 'connection-rejected'
+      }));
+      
+      pending.conn.close();
+      pendingRequests.delete(peerId);
+      
+      // Remove from contacts if not saved
+      if (!contacts.has(peerId)) {
+        // Don't add to contacts
+      }
+      
+      updateContactsList();
+      showToast(`Ignored connection from ${peerId}`);
+    }
+
+    // Delete contact
+    function deleteContact(domain) {
+      if (confirm(`Remove ${domain} from contacts?`)) {
+        contacts.delete(domain);
+        
+        if (connections.has(domain)) {
+          connections.get(domain).conn.close();
+          connections.delete(domain);
+        }
+        
+        if (pendingRequests.has(domain)) {
+          pendingRequests.delete(domain);
+        }
+        
+        if (selectedContact === domain) {
+          selectedContact = null;
+          currentChatName.textContent = 'Select a contact';
+          currentChatDomain.textContent = '';
+          currentChatStatus.className = 'online-indicator offline';
+          messagesContainer.innerHTML = '';
+        }
+        
+        saveContacts();
+        updateContactsList();
+        updateOnlineCount();
+        showToast('Contact removed');
+      }
+    }
+
+    // ============================================
+    // CALL HANDLING - IMPROVED
+    // ============================================
+    
+    // Start voice call
+    function startVoiceCall() {
+      if (!selectedContact || !connections.has(selectedContact)) {
+        showToast('User not connected');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      
+      // Send call request
+      conn.send(JSON.stringify({
+        type: 'call-request',
+        from: myDomain,
+        callType: 'audio'
+      }));
+      
+      // Show outgoing call UI
+      showCallUI('outgoing', 'audio');
+    }
+
+    // Start video call
+    function startVideoCall() {
+      if (!selectedContact || !connections.has(selectedContact)) {
+        showToast('User not connected');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      
+      // Send call request
+      conn.send(JSON.stringify({
+        type: 'call-request',
+        from: myDomain,
+        callType: 'video'
+      }));
+      
+      // Show outgoing call UI
+      showCallUI('outgoing', 'video');
+    }
+
+    function handleCallRequest(peerId, request) {
+      const contact = contacts.get(peerId) || { name: peerId };
+      
+      // Show incoming call UI
+      callAvatarText.textContent = contact.name.charAt(0).toUpperCase();
+      callStatus.textContent = `${contact.name} is calling...`;
+      
+      callButtons.innerHTML = `
+        <button class="call-btn accept" onclick="acceptCall('${peerId}', '${request.callType}')">
+          <i class="fas fa-phone"></i>
+        </button>
+        <button class="call-btn decline" onclick="rejectCall('${peerId}')">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      
+      callOverlay.classList.add('active');
+      
+      // Store call info
+      currentCall = {
+        peerId: peerId,
+        type: request.callType,
+        direction: 'incoming'
+      };
+    }
+
+    function handleCallAccepted(peerId, request) {
+      callOverlay.classList.remove('active');
+      
+      if (request.callType === 'video') {
+        startVideoCallMedia(peerId, true);
+      } else {
+        startVideoCallMedia(peerId, false);
+      }
+    }
+
+    function handleCallRejected(peerId) {
+      callOverlay.classList.remove('active');
+      showToast('Call rejected');
+      currentCall = null;
+    }
+
+    window.acceptCall = function(peerId, callType) {
+      callOverlay.classList.remove('active');
+      
+      const conn = connections.get(peerId).conn;
+      conn.send(JSON.stringify({
+        type: 'call-accepted',
+        callType: callType
+      }));
+      
+      if (callType === 'video') {
+        startVideoCallMedia(peerId, true);
+      } else {
+        startVideoCallMedia(peerId, false);
+      }
+    };
+
+    window.rejectCall = function(peerId) {
+      callOverlay.classList.remove('active');
+      
+      const conn = connections.get(peerId).conn;
+      conn.send(JSON.stringify({
+        type: 'call-rejected'
+      }));
+      
+      currentCall = null;
+    };
+
+    async function startVideoCallMedia(peerId, withVideo) {
+      try {
+        showToast('Starting call...');
+        
+        const constraints = {
+          audio: true,
+          video: withVideo ? {
+            width: { ideal: isMobile ? 640 : 1280 },
+            height: { ideal: isMobile ? 480 : 720 },
+            facingMode: 'user'
+          } : false
+        };
+        
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        if (withVideo) {
+          await getCameras();
+        }
+        
+        const call = peer.call(peerId, localStream);
+        
+        call.on('stream', (remoteStream) => {
+          mediaCalls.set(peerId, { call, stream: remoteStream });
+          if (withVideo) {
+            showRemoteVideo(peerId, remoteStream);
+          } else {
+            startCallTimer();
+          }
+        });
+        
+        call.on('close', () => {
+          endCurrentCall();
+        });
+        
+        call.on('error', (err) => {
+          console.error('Call error:', err);
+          showToast('Call failed');
+          endCurrentCall();
+        });
+        
+        if (withVideo) {
+          showLocalVideo();
+        } else {
+          // Voice call UI
+          videoOverlay.classList.add('active');
+          videoGrid.innerHTML = '<div style="color: white; text-align: center; padding: 50px;">Voice call in progress...</div>';
+          startCallTimer();
+        }
+        
+        currentCall = {
+          peerId: peerId,
+          type: withVideo ? 'video' : 'audio',
+          direction: 'outgoing',
+          call: call
+        };
+        
+      } catch (err) {
+        console.error('Failed to start call:', err);
+        showToast('Could not access camera/microphone');
+        endCurrentCall();
+      }
+    }
+
+    function handleIncomingCall(call) {
+      const peerId = call.peer;
+      
+      // Check if we have a pending call acceptance
+      if (currentCall && currentCall.peerId === peerId) {
+        call.answer(localStream);
+        
+        call.on('stream', (remoteStream) => {
+          mediaCalls.set(peerId, { call, stream: remoteStream });
+          if (currentCall.type === 'video') {
+            showRemoteVideo(peerId, remoteStream);
+          } else {
+            startCallTimer();
+          }
+        });
+        
+        call.on('close', () => {
+          endCurrentCall();
+        });
+        
+        if (currentCall.type === 'video') {
+          showLocalVideo();
+        }
+      } else {
+        call.close();
+      }
+    }
+
+    function showCallUI(direction, type) {
+      const contact = contacts.get(selectedContact) || { name: selectedContact };
+      
+      callAvatarText.textContent = contact.name.charAt(0).toUpperCase();
+      callStatus.textContent = direction === 'outgoing' ? 'Calling...' : 'Incoming call...';
+      
+      if (direction === 'outgoing') {
+        callButtons.innerHTML = `
+          <button class="call-btn decline" onclick="endCurrentCall()">
+            <i class="fas fa-times"></i> Cancel
+          </button>
+        `;
+      }
+      
+      callOverlay.classList.add('active');
+    }
+
+    function startCallTimer() {
+      callStartTime = Date.now();
+      callTimer.textContent = '00:00';
+      
+      callTimer.style.display = 'block';
+      callStatus.style.display = 'none';
+      
+      callTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        callTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }, 1000);
+    }
+
+    function endCurrentCall() {
+      if (callTimerInterval) {
+        clearInterval(callTimerInterval);
+        callTimerInterval = null;
+      }
+      
+      mediaCalls.forEach((data, domain) => {
+        if (data.call) data.call.close();
+      });
+      mediaCalls.clear();
+      
+      videoGrid.innerHTML = '';
+      videoOverlay.classList.remove('active');
+      callOverlay.classList.remove('active');
+      
+      if (localStream) {
+        localStream.getTracks().forEach(t => {
+          t.stop();
+          t.enabled = false;
+        });
+        localStream = null;
+      }
+      
+      if (currentCall && connections.has(currentCall.peerId)) {
+        const conn = connections.get(currentCall.peerId).conn;
+        conn.send(JSON.stringify({ type: 'call-end' }));
+      }
+      
+      currentCall = null;
+      callStartTime = null;
+      callTimer.textContent = '';
+      callTimer.style.display = 'none';
+      callStatus.style.display = 'block';
+    }
+
+    window.endCurrentCall = endCurrentCall;
+
+    // Camera functions
+    async function getCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        availableCameras = devices.filter(device => device.kind === 'videoinput');
+        
+        cameraSelect.innerHTML = '<option value="">📱 Switch Camera</option>';
+        if (availableCameras.length === 0) return;
+        
+        availableCameras.forEach((camera, index) => {
+          const option = document.createElement('option');
+          option.value = camera.deviceId;
+          let label = camera.label || `Camera ${index + 1}`;
+          if (label.toLowerCase().includes('front')) label = '🤳 Front';
+          if (label.toLowerCase().includes('back')) label = '📷 Rear';
+          option.text = label;
+          cameraSelect.appendChild(option);
+        });
+      } catch (err) {
+        console.error('Error getting cameras:', err);
+      }
+    }
+
+    function showLocalVideo() {
+      videoOverlay.classList.add('active');
+      
+      let wrapper = document.getElementById('video-local');
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = 'video-local';
+        
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.srcObject = localStream;
+        
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = 'You';
+        
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
+      }
+      
+      updateVideoGridClass();
+    }
+
+    function showRemoteVideo(domain, stream) {
+      videoOverlay.classList.add('active');
+      
+      let wrapper = document.getElementById(`video-${domain}`);
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = `video-${domain}`;
+        
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        
+        const contact = contacts.get(domain);
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = contact?.name || domain;
+        
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
+      }
+      
+      updateVideoGridClass();
+    }
+
+    function updateVideoGridClass() {
+      const videoCount = videoGrid.children.length;
+      if (videoCount === 2) {
+        videoGrid.classList.add('has-two');
+      } else {
+        videoGrid.classList.remove('has-two');
+      }
+    }
+
+    // ============================================
+    // CHAT FUNCTIONS
+    // ============================================
+    
+    // Connect to peer
+    async function connectToPeer(domain) {
+      if (!domain) return;
+      
+      if (domain === myDomain) {
+        showToast('Cannot connect to yourself');
+        return;
+      }
+      
+      if (connections.has(domain)) {
+        selectContact(domain);
+        closeModal();
+        return;
+      }
+      
+      showToast(`Connecting to ${domain}...`);
+      
+      const txts = await fetchTXTRecords(domain);
+      let peerId = domain;
+      for (let txt of txts) {
+        if (txt.startsWith('hnschat-peer=')) {
+          peerId = txt.split('=')[1];
+          break;
+        }
+      }
+      
+      const conn = peer.connect(peerId);
+      setupConnection(conn);
+      
+      closeModal();
+    }
+
+    // Add message
+    function addMessage(domain, message) {
+      if (!messages.has(domain)) {
+        messages.set(domain, []);
+      }
+      messages.get(domain).push(message);
+      
+      if (selectedContact === domain) {
+        displayMessage(message, message.from === myDomain);
+      }
+      
+      updateContactsList();
+    }
+
+    // Display message
+    function displayMessage(message, isOwn) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
+      
+      const time = new Date(message.timestamp).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      if (message.type === 'text') {
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            ${message.text}
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      } else if (message.type === 'file') {
+        let preview = '';
+        if (message.preview) {
+          preview = `<img src="${message.preview}" class="file-preview" alt="preview">`;
+        } else if (message.fileType?.startsWith('image/')) {
+          preview = `<img src="${message.dataUrl}" class="file-preview" alt="preview">`;
+        }
+        
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            <div class="message-file" onclick="downloadFile('${message.transferId}')">
+              <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
+              <div style="flex:1">
+                <div>${message.fileName}</div>
+                <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
+                ${message.progress ? `
+                  <div class="file-progress">
+                    <div class="file-progress-fill" style="width: ${message.progress}%"></div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            ${preview}
+            <div class="message-time">${time}</div>
+          </div>
+        `;
+      }
+      
+      messagesContainer.appendChild(wrapper);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Select contact
+    function selectContact(domain) {
+      selectedContact = domain;
+      const contact = contacts.get(domain);
+      
+      if (contact) {
+        currentChatName.innerHTML = `${contact.name} ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}`;
+        currentChatDomain.textContent = `@${domain}`;
+        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
+        
+        // Load messages
+        messagesContainer.innerHTML = '';
+        const contactMessages = messages.get(domain) || [];
+        contactMessages.forEach(msg => {
+          displayMessage(msg, msg.from === myDomain);
+        });
+        
+        // Show chat area on mobile
+        document.getElementById('chatArea').classList.add('active');
+        updateContactsList();
+        
+        // Enable send if online
+        sendBtn.disabled = !contact.online;
+      }
+    }
+
+    // Update contacts list
+    function updateContactsList() {
+      contactsList.innerHTML = '';
+      
+      // Sort contacts: online first, then alphabetically
+      const sorted = Array.from(contacts.values()).sort((a, b) => {
+        if (a.online && !b.online) return -1;
+        if (!a.online && b.online) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      
+      sorted.forEach(contact => {
+        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
+        const isSelected = selectedContact === contact.domain;
+        const isPending = pendingRequests.has(contact.domain);
+        const pendingType = pendingRequests.get(contact.domain)?.type;
+        
+        const div = document.createElement('div');
+        div.className = `contact-item ${isSelected ? 'selected' : ''} ${isPending ? 'pending' : ''}`;
+        
+        let requestButtons = '';
+        if (isPending && pendingType === 'incoming') {
+          requestButtons = `
+            <div class="request-actions">
+              <button class="request-btn accept" onclick="event.stopPropagation(); acceptConnection('${contact.domain}')">
+                <i class="fas fa-check"></i> Accept
+              </button>
+              <button class="request-btn ignore" onclick="event.stopPropagation(); ignoreConnection('${contact.domain}')">
+                <i class="fas fa-times"></i> Ignore
+              </button>
+            </div>
+          `;
+        }
+        
+        div.innerHTML = `
+          <div class="contact-avatar">
+            ${contact.avatar 
+              ? `<img src="${contact.avatar}" alt="${contact.name}">`
+              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
+            }
+            ${isPending ? '<span class="request-badge"><i class="fas fa-clock"></i></span>' : ''}
+          </div>
+          <div class="contact-details">
+            <div class="contact-name">
+              ${contact.name}
+              ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}
+              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
+            </div>
+            <div class="contact-domain">@${contact.domain}</div>
+            <div class="last-message">
+              ${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}
+            </div>
+            ${requestButtons}
+          </div>
+          <div class="contact-actions">
+            <button class="contact-action-btn" onclick="event.stopPropagation(); deleteContact('${contact.domain}')">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        `;
+        
+        contactsList.appendChild(div);
+      });
+      
+      // Update discovered list
+      updateDiscoveredList();
+      updateOnlineCount();
+    }
+
+    // Update discovered peers
+    function updateDiscoveredList() {
+      if (discoveredPeers.size === 0) {
+        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
+        return;
+      }
+      
+      discoveredPeersList.innerHTML = '';
+      Array.from(discoveredPeers).forEach(domain => {
+        if (domain !== myDomain && !contacts.has(domain)) {
+          const div = document.createElement('div');
+          div.className = 'peer-item';
+          div.onclick = () => {
+            newPeerDomain.value = domain;
+            connectToPeer(domain);
+          };
+          div.innerHTML = `
+            <i class="fas fa-user"></i>
+            <div>
+              <div>${domain} ${ADMIN_USERS[domain] ? '<span class="admin-badge-small">ADMIN</span>' : ''}</div>
+              <small style="color: var(--text-muted);">
+                ${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}
+              </small>
+            </div>
+            <button class="contact-action-btn" style="margin-left: auto;">
+              <i class="fas fa-plus"></i>
+            </button>
+          `;
+          discoveredPeersList.appendChild(div);
+        }
+      });
+    }
+
+    // Update online count
+    function updateOnlineCount() {
+      let count = 0;
+      contacts.forEach(c => { if (c.online) count++; });
+      onlineCount.textContent = count;
+    }
+
+    // Search input handler
+    searchInput.addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase().trim();
+      
+      // Filter contacts
+      document.querySelectorAll('.contact-item').forEach(item => {
+        const name = item.querySelector('.contact-name').textContent.toLowerCase();
+        const domain = item.querySelector('.contact-domain').textContent.toLowerCase();
+        item.style.display = (name.includes(term) || domain.includes(term)) ? 'flex' : 'none';
+      });
+      
+      // Show/hide add button for new domains
+      if (term && !contacts.has(term) && term.includes('.')) {
+        searchAddBtn.classList.add('visible');
+      } else {
+        searchAddBtn.classList.remove('visible');
+      }
+    });
+
+    // Search add button
+    searchAddBtn.addEventListener('click', () => {
+      const domain = searchInput.value.trim().toLowerCase();
+      if (domain && !contacts.has(domain)) {
+        connectToPeer(domain);
+        searchInput.value = '';
+        searchAddBtn.classList.remove('visible');
+      }
+    });
+
+    // ============================================
+    // FILE TRANSFER - WITH PREVIEW
+    // ============================================
+    async function sendFile(file) {
+      if (!selectedContact || !connections.has(selectedContact)) {
+        showToast('No connection');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      const transferId = Date.now() + '-' + Math.random().toString(36);
+      const chunkSize = 16384;
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      
+      // Generate preview for images
+      let preview = null;
+      if (file.type.startsWith('image/')) {
+        preview = await generateImagePreview(file);
+      }
+      
+      // Send file info
+      conn.send(JSON.stringify({
+        type: 'file-info',
+        transferId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        totalChunks,
+        preview: preview
+      }));
+      
+      const message = {
+        type: 'file',
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        transferId,
+        from: myDomain,
+        to: selectedContact,
+        timestamp: Date.now(),
+        progress: 0,
+        preview: preview
+      };
+      
+      addMessage(selectedContact, message);
+      
+      // Read and send file
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const bytes = new Uint8Array(e.target.result);
+        
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, file.size);
+          const chunk = bytes.slice(start, end);
+          
+          let binary = '';
+          chunk.forEach(byte => binary += String.fromCharCode(byte));
+          
+          conn.send(JSON.stringify({
+            type: 'file-chunk',
+            transferId,
+            index: i,
+            data: btoa(binary)
+          }));
+          
+          message.progress = Math.round(((i + 1) / totalChunks) * 100);
+          
+          if (selectedContact) {
+            messagesContainer.innerHTML = '';
+            (messages.get(selectedContact) || []).forEach(msg => {
+              displayMessage(msg, msg.from === myDomain);
+            });
+          }
+        }
+      };
+      
+      reader.readAsArrayBuffer(file);
+    }
+
+    function generateImagePreview(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          resolve(e.target.result);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function handleFileInfo(domain, info) {
+      fileTransfers.set(info.transferId, {
+        ...info,
+        chunks: new Array(info.totalChunks),
+        received: 0,
+        peerId: domain
+      });
+      
+      addMessage(domain, {
+        type: 'file',
+        fileName: info.name,
+        fileSize: info.size,
+        fileType: info.type,
+        transferId: info.transferId,
+        from: domain,
+        to: myDomain,
+        timestamp: Date.now(),
+        progress: 0,
+        preview: info.preview
+      });
+    }
+
+    function handleFileChunk(domain, chunk) {
+      const transfer = fileTransfers.get(chunk.transferId);
+      if (!transfer) return;
+      
+      const binary = atob(chunk.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      
+      transfer.chunks[chunk.index] = bytes;
+      transfer.received++;
+      
+      const progress = Math.round((transfer.received / transfer.totalChunks) * 100);
+      
+      const msgs = messages.get(domain);
+      const msg = msgs?.find(m => m.transferId === chunk.transferId);
+      if (msg) {
+        msg.progress = progress;
+        if (selectedContact === domain) {
+          messagesContainer.innerHTML = '';
+          msgs.forEach(m => displayMessage(m, m.from === myDomain));
+        }
+      }
+      
+      if (transfer.received === transfer.totalChunks) {
+        completeFileTransfer(chunk.transferId);
+      }
+    }
+
+    function completeFileTransfer(transferId) {
+      const transfer = fileTransfers.get(transferId);
+      if (!transfer) return;
+      
+      let totalLength = 0;
+      transfer.chunks.forEach(chunk => totalLength += chunk.length);
+      
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      transfer.chunks.forEach(chunk => {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      });
+      
+      const blob = new Blob([combined], { type: transfer.type });
+      const url = URL.createObjectURL(blob);
+      transfer.blobUrl = url;
+      
+      // Create data URL for images
+      let dataUrl = null;
+      if (transfer.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          dataUrl = e.target.result;
+          updateFileMessage(transferId, url, dataUrl);
+        };
+        reader.readAsDataURL(blob);
+      } else {
+        updateFileMessage(transferId, url);
+      }
+    }
+
+    function updateFileMessage(transferId, blobUrl, dataUrl) {
+      const transfer = fileTransfers.get(transferId);
+      if (!transfer) return;
+      
+      const msgs = messages.get(transfer.peerId);
+      const msg = msgs?.find(m => m.transferId === transferId);
+      if (msg) {
+        msg.complete = true;
+        msg.blobUrl = blobUrl;
+        msg.dataUrl = dataUrl;
+        
+        if (selectedContact === transfer.peerId) {
+          messagesContainer.innerHTML = '';
+          msgs.forEach(m => displayMessage(m, m.from === myDomain));
+        }
+      }
+    }
+
+    window.downloadFile = function(transferId) {
+      const transfer = fileTransfers.get(transferId);
+      if (transfer?.blobUrl) {
+        const a = document.createElement('a');
+        a.href = transfer.blobUrl;
+        a.download = transfer.name;
+        a.click();
+      }
+    };
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function getFileIcon(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif','webp'].includes(ext)) return 'fa-image';
+      if (['mp4','avi','mov','mkv'].includes(ext)) return 'fa-video';
+      if (['mp3','wav','flac'].includes(ext)) return 'fa-music';
+      if (['pdf'].includes(ext)) return 'fa-file-pdf';
+      if (['doc','docx'].includes(ext)) return 'fa-file-word';
+      if (['xls','xlsx'].includes(ext)) return 'fa-file-excel';
+      if (['zip','rar','7z'].includes(ext)) return 'fa-file-archive';
+      return 'fa-file';
+    }
+
+    // Save chat
+    function saveChat(domain) {
+      const chatMessages = messages.get(domain) || [];
+      if (chatMessages.length === 0) {
+        showToast('No messages to save');
+        return;
+      }
+      
+      const contact = contacts.get(domain) || { name: domain };
+      let content = `Chat with ${contact.name} (@${domain})\n`;
+      content += `Date: ${new Date().toLocaleString()}\n`;
+      content += `================================\n\n`;
+      
+      chatMessages.forEach(msg => {
+        const time = new Date(msg.timestamp).toLocaleString();
+        const sender = msg.from === myDomain ? 'Me' : contact.name;
+        if (msg.type === 'text') {
+          content += `[${time}] ${sender}: ${msg.text}\n`;
+        } else {
+          content += `[${time}] ${sender}: [File] ${msg.fileName}\n`;
+        }
+      });
+      
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chat-${domain}-${new Date().toISOString().slice(0,10)}.txt`;
+      a.click();
+      
+      showToast('Chat saved');
+    }
+
+    // ============================================
+    // DISCOVERY
+    // ============================================
+    function startDiscovery() {
+      const common = ['bob.hns', 'charlie.hns', 'alice.hns', 'example.hns', ...Object.keys(ADMIN_USERS)];
+      
+      setInterval(() => {
+        common.forEach(async domain => {
+          if (domain !== myDomain && !contacts.has(domain) && !connections.has(domain)) {
+            const records = await fetchTXTRecords(domain);
+            if (records.length > 0 || ADMIN_USERS[domain]) {
+              discoveredPeers.add(domain);
+              updateDiscoveredList();
+            }
+          }
+        });
+      }, 30000);
+    }
+
+    // ============================================
+    // MODAL FUNCTIONS
+    // ============================================
+    function closeModal() {
+      addPeerModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+    }
+
+    // ============================================
+    // SETTINGS
+    // ============================================
+    settingsBtn.addEventListener('click', () => {
+      settingsDomain.textContent = `@${myDomain}`;
+      settingsName.textContent = myProfile?.name || myDomain;
+      
+      const savedPin = localStorage.getItem('nebula-pin');
+      const savedDistress = localStorage.getItem('nebula-distress');
+      
+      pinToggle.checked = !!savedPin;
+      distressToggle.checked = !!savedDistress;
+      
+      if (savedPin) pinSetup.classList.remove('hidden');
+      if (savedDistress) distressSetup.classList.remove('hidden');
+      
+      settingsModal.classList.add('active');
+      modalBackdrop.classList.add('active');
+    });
+
+    pinToggle.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        pinSetup.classList.remove('hidden');
+      } else {
+        pinSetup.classList.add('hidden');
+        localStorage.removeItem('nebula-pin');
+        pinCode = null;
+      }
+    });
+
+    savePinBtn.addEventListener('click', () => {
+      const pin = document.getElementById('pinCode').value;
+      if (pin.length === 4 && /^\d+$/.test(pin)) {
+        localStorage.setItem('nebula-pin', pin);
+        pinCode = pin;
+        showToast('PIN saved');
+      } else {
+        showToast('PIN must be 4 digits');
+      }
+    });
+
+    distressToggle.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        distressSetup.classList.remove('hidden');
+      } else {
+        distressSetup.classList.add('hidden');
+        localStorage.removeItem('nebula-distress');
+        distressCode = null;
+      }
+    });
+
+    saveDistressBtn.addEventListener('click', () => {
+      const code = document.getElementById('distressCode').value;
+      if (code.length === 4 && /^\d+$/.test(code)) {
+        localStorage.setItem('nebula-distress', code);
+        distressCode = code;
+        showToast('Distress code saved');
+      } else {
+        showToast('Code must be 4 digits');
+      }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      if (confirm('Logout?')) {
+        endCurrentCall();
+        if (peer) peer.destroy();
+        localStorage.removeItem('nebula-domain');
+        localStorage.removeItem('nebula-challenge');
+        localStorage.removeItem('nebula-isAdmin');
+        // Keep contacts, PIN, distress
+        location.reload();
+      }
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+    });
+
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
+    
+    // Send message
+    sendBtn.addEventListener('click', () => {
+      const text = messageInput.value.trim();
+      if (!text || !selectedContact || !connections.has(selectedContact)) return;
+      
+      const conn = connections.get(selectedContact).conn;
+      conn.send(text);
+      
+      addMessage(selectedContact, {
+        type: 'text',
+        text,
+        from: myDomain,
+        to: selectedContact,
+        timestamp: Date.now()
+      });
+      
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+    });
+
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // Enter to send
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+      }
+    });
+
+    // Back button
+    backBtn.addEventListener('click', () => {
+      document.getElementById('chatArea').classList.remove('active');
+    });
+
+    // Contact info click
+    contactInfoBtn.addEventListener('click', () => {
+      if (selectedContact) {
+        // Show contact info
+        const contact = contacts.get(selectedContact);
+        if (contact) {
+          showToast(`${contact.name} (@${selectedContact})`);
+        }
+      }
+    });
+
+    // Call buttons
+    audioCallBtn.addEventListener('click', startVoiceCall);
+    videoCallBtn.addEventListener('click', startVideoCall);
+
+    // Attach file
+    attachBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = 'image/*,.pdf,.doc,.docx,.txt';
+      input.onchange = (e) => {
+        Array.from(e.target.files).forEach(sendFile);
+      };
+      input.click();
+    });
+
+    // Toggle QR
+    qrToggleBtn.addEventListener('click', () => {
+      qrArea.classList.toggle('show');
+    });
+
+    // Save chat
+    saveChatBtn.addEventListener('click', () => {
+      if (selectedContact) {
+        saveChat(selectedContact);
+      }
+    });
+
+    // Show add peer modal
+    showAddPeerBtn.addEventListener('click', () => {
+      addPeerModal.classList.add('active');
+      modalBackdrop.classList.add('active');
+      updateDiscoveredList();
+    });
+
+    // Close modal
+    closeModalBtn.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', closeModal);
+
+    // Connect to peer
+    connectToPeerBtn.addEventListener('click', () => {
+      connectToPeer(newPeerDomain.value.trim().toLowerCase());
+    });
+
+    newPeerDomain.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        connectToPeer(newPeerDomain.value.trim().toLowerCase());
+      }
+    });
+
+    // Video call controls
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const track = localStream.getAudioTracks()[0];
+        if (track) {
+          track.enabled = !track.enabled;
+          toggleMicBtn.innerHTML = track.enabled 
+            ? '<i class="fas fa-microphone"></i>' 
+            : '<i class="fas fa-microphone-slash"></i>';
+        }
+      }
+    });
+
+    toggleCamBtn.addEventListener('click', () => {
+      if (localStream) {
+        const track = localStream.getVideoTracks()[0];
+        if (track) {
+          track.enabled = !track.enabled;
+          toggleCamBtn.innerHTML = track.enabled 
+            ? '<i class="fas fa-video"></i>' 
+            : '<i class="fas fa-video-slash"></i>';
+        }
+      }
+    });
+
+    endCallBtn.addEventListener('click', endCurrentCall);
+
+    cameraSelect.addEventListener('change', async (e) => {
+      if (!localStream) return;
+      
+      const deviceId = e.target.value;
+      if (!deviceId) return;
+      
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) videoTrack.stop();
+      
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { 
+            deviceId: { exact: deviceId },
+            width: { ideal: isMobile ? 640 : 1280 },
+            height: { ideal: isMobile ? 480 : 720 }
+          }
+        });
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        localStream.removeTrack(videoTrack);
+        localStream.addTrack(newVideoTrack);
+        
+        const localVideo = document.querySelector('#video-local video');
+        if (localVideo) localVideo.srcObject = localStream;
+        
+        mediaCalls.forEach((data) => {
+          if (data.call && data.call.peerConnection) {
+            const sender = data.call.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+            if (sender) sender.replaceTrack(newVideoTrack);
+          }
+        });
+        
+        showToast('Camera switched');
+      } catch (err) {
+        console.error('Failed to switch camera:', err);
+        showToast('Failed to switch camera');
+      }
+    });
+
+    // Handle mobile back button
+    window.addEventListener('popstate', () => {
+      if (document.getElementById('chatArea').classList.contains('active')) {
+        document.getElementById('chatArea').classList.remove('active');
+      }
+    });
+
+    // Make functions global for onclick handlers
+    window.acceptConnection = acceptConnection;
+    window.ignoreConnection = ignoreConnection;
+    window.deleteContact = deleteContact;
+    window.acceptCall = acceptCall;
+    window.rejectCall = rejectCall;
+    window.endCurrentCall = endCurrentCall;
+
+    // ============================================
+    // INITIALIZE
+    // ============================================
+    
+    // Check for saved login
+    checkSavedLogin();
+
+    console.log('NEBULA ready - All features working!');
+  </script>
+</body>
+</html>
