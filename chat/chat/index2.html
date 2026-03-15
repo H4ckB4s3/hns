@@ -130,6 +130,10 @@
       border-color: var(--accent-blue);
     }
 
+    .input-field.error {
+      border-color: var(--accent-red);
+    }
+
     .admin-badge {
       position: absolute;
       right: 12px;
@@ -213,6 +217,22 @@
       font-size: 24px;
       text-align: center;
       letter-spacing: 4px;
+    }
+
+    .login-status {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 14px;
+      color: var(--text-muted);
+      min-height: 20px;
+    }
+
+    .login-status.error {
+      color: var(--accent-red);
+    }
+
+    .login-status.success {
+      color: var(--accent-green);
     }
 
     /* MAIN APP */
@@ -1409,7 +1429,7 @@
         </button>
       </div>
       
-      <div id="loginStatus" style="text-align: center; margin-top: 16px; font-size: 14px; color: var(--text-muted);"></div>
+      <div id="loginStatus" class="login-status"></div>
     </div>
   </div>
 
@@ -1666,11 +1686,11 @@
     let myProfile = null;
     let currentChallenge = '';
     let isAdmin = false;
-    let connections = new Map(); // domain -> {conn, dataChannel, messageQueue, lastPing}
-    let mediaCalls = new Map(); // domain -> media call
-    let contacts = new Map(); // domain -> profile
+    let connections = new Map();
+    let mediaCalls = new Map();
+    let contacts = new Map();
     let pendingRequests = new Map();
-    let messages = new Map(); // domain -> message array with status
+    let messages = new Map();
     let selectedContact = null;
     let localStream = null;
     let fileTransfers = new Map();
@@ -1684,8 +1704,9 @@
     let pinCode = null;
     let distressCode = null;
     let pinAttempts = 0;
-    let reconnectAttempts = new Map();
     let messageId = 0;
+    let loginInProgress = false;
+    let reconnectAttempts = 0;
 
     // ============================================
     // DOM ELEMENTS
@@ -1786,13 +1807,31 @@
       }, duration);
     }
 
-    // FIXED: Better DNS resolution with Google DNS
+    function setLoginStatus(message, type = 'info') {
+      loginStatus.textContent = message;
+      loginStatus.className = 'login-status';
+      if (type === 'error') {
+        loginStatus.classList.add('error');
+      } else if (type === 'success') {
+        loginStatus.classList.add('success');
+      }
+    }
+
+    // FIXED: Better DNS resolution with timeout
     async function fetchTXTRecords(domain) {
       if (ADMIN_USERS[domain]) return [];
+      
+      // Create a timeout promise
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('DNS timeout')), 5000)
+      );
+      
       try {
         // Using Google DNS over HTTPS for reliability
-        const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
+        const fetchPromise = fetch(`https://dns.google/resolve?name=${domain}&type=TXT`);
+        const response = await Promise.race([fetchPromise, timeout]);
         const data = await response.json();
+        
         if (data.Answer && data.Answer.length > 0) {
           return data.Answer
             .filter(record => record.type === 16)
@@ -1832,34 +1871,63 @@
     }
 
     function saveContacts() {
-      const contactsArray = Array.from(contacts.values())
-        .filter(c => c.domain !== myDomain)
-        .map(c => ({
-          domain: c.domain,
-          name: c.name,
-          avatar: c.avatar,
-          isAdmin: c.isAdmin
-        }));
-      localStorage.setItem('nebula-contacts', JSON.stringify(contactsArray));
+      try {
+        const contactsArray = Array.from(contacts.values())
+          .filter(c => c.domain !== myDomain)
+          .map(c => ({
+            domain: c.domain,
+            name: c.name,
+            avatar: c.avatar,
+            isAdmin: c.isAdmin
+          }));
+        localStorage.setItem('nebula-contacts', JSON.stringify(contactsArray));
+      } catch (e) {
+        console.error('Failed to save contacts:', e);
+      }
     }
 
     function loadContacts() {
-      const saved = localStorage.getItem('nebula-contacts');
-      if (saved) {
-        try {
+      try {
+        const saved = localStorage.getItem('nebula-contacts');
+        if (saved) {
           const contactsArray = JSON.parse(saved);
           contactsArray.forEach(c => {
             if (c.domain !== myDomain) {
               contacts.set(c.domain, { ...c, online: false });
             }
           });
-        } catch (e) {
-          console.error('Failed to load contacts:', e);
         }
+      } catch (e) {
+        console.error('Failed to load contacts:', e);
       }
     }
 
-    // FIXED: Generate unique message ID
+    function saveMessages() {
+      try {
+        const messagesObj = {};
+        messages.forEach((msgs, domain) => {
+          messagesObj[domain] = msgs;
+        });
+        localStorage.setItem('nebula-messages', JSON.stringify(messagesObj));
+      } catch (e) {
+        console.error('Failed to save messages:', e);
+      }
+    }
+
+    function loadMessages() {
+      try {
+        const saved = localStorage.getItem('nebula-messages');
+        if (saved) {
+          const messagesObj = JSON.parse(saved);
+          Object.entries(messagesObj).forEach(([domain, msgs]) => {
+            messages.set(domain, msgs);
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load messages:', e);
+      }
+    }
+
     function generateMessageId() {
       return `${Date.now()}-${messageId++}-${Math.random().toString(36).substring(2, 9)}`;
     }
@@ -1938,36 +2006,43 @@
     }
 
     // ============================================
-    // LOGIN FLOW
+    // LOGIN FLOW - FIXED
     // ============================================
     function checkSavedLogin() {
       const savedDomain = localStorage.getItem('nebula-domain');
       const savedChallenge = localStorage.getItem('nebula-challenge');
       const savedIsAdmin = localStorage.getItem('nebula-isAdmin') === 'true';
       
-      if (savedDomain && savedChallenge) {
+      if (savedDomain && savedChallenge && !loginInProgress) {
         domainInput.value = savedDomain;
         myDomain = savedDomain;
         currentChallenge = savedChallenge;
         isAdmin = savedIsAdmin;
         
         if (savedIsAdmin) {
+          // Auto admin login
           adminLogin();
         } else {
+          // Show challenge for verification
           challengeText.textContent = currentChallenge;
           challengeArea.classList.remove('hidden');
           loginBtn.style.display = 'none';
-          loginStatus.textContent = 'Click verify to continue';
+          setLoginStatus('Add this code to your DNS TXT record and click Verify');
         }
       }
     }
 
     function adminLogin() {
+      if (loginInProgress) return;
+      
       const domain = domainInput.value.trim().toLowerCase();
       if (!ADMIN_USERS[domain]) {
-        showToast('Invalid admin user');
+        setLoginStatus('Invalid admin user', 'error');
         return;
       }
+      
+      loginInProgress = true;
+      setLoginStatus('Logging in as admin...');
       
       isAdmin = true;
       myDomain = domain;
@@ -1987,13 +2062,18 @@
       
       adminBadge.classList.remove('hidden');
       loadContacts();
-      startPeer();
+      loadMessages();
+      
+      // Start peer after a short delay
+      setTimeout(() => {
+        startPeer();
+      }, 100);
     }
 
     domainInput.addEventListener('input', () => {
       challengeArea.classList.add('hidden');
       loginBtn.style.display = 'block';
-      loginStatus.textContent = '';
+      setLoginStatus('');
       
       const domain = domainInput.value.trim().toLowerCase();
       if (ADMIN_USERS[domain]) {
@@ -2006,9 +2086,15 @@
     });
 
     loginBtn.addEventListener('click', async () => {
-      const domain = domainInput.value.trim().toLowerCase();
-      if (!domain) return;
+      if (loginInProgress) return;
       
+      const domain = domainInput.value.trim().toLowerCase();
+      if (!domain) {
+        setLoginStatus('Please enter a domain', 'error');
+        return;
+      }
+      
+      loginInProgress = true;
       currentChallenge = Math.floor(100000 + Math.random() * 900000).toString();
       myDomain = domain;
       isAdmin = false;
@@ -2016,11 +2102,13 @@
       challengeText.textContent = currentChallenge;
       challengeArea.classList.remove('hidden');
       loginBtn.style.display = 'none';
-      loginStatus.textContent = 'Add this 6-digit code as TXT record to your domain';
+      setLoginStatus('Add this 6-digit code to your DNS TXT record');
       
       localStorage.setItem('nebula-domain', myDomain);
       localStorage.setItem('nebula-challenge', currentChallenge);
       localStorage.setItem('nebula-isAdmin', 'false');
+      
+      loginInProgress = false;
     });
 
     adminLoginBtn.addEventListener('click', adminLogin);
@@ -2028,34 +2116,50 @@
     cancelVerifyBtn.addEventListener('click', () => {
       challengeArea.classList.add('hidden');
       loginBtn.style.display = 'block';
-      loginStatus.textContent = '';
+      setLoginStatus('');
       localStorage.removeItem('nebula-domain');
       localStorage.removeItem('nebula-challenge');
       localStorage.removeItem('nebula-isAdmin');
     });
 
     verifyBtn.addEventListener('click', async () => {
-      loginStatus.textContent = 'Checking DNS...';
-      const txts = await fetchTXTRecords(myDomain);
+      if (loginInProgress) return;
       
-      if (txts.includes(currentChallenge)) {
-        loginStatus.textContent = '✅ Verified! Loading...';
-        const records = await fetchTXTRecords(myDomain);
-        myProfile = parseProfile(myDomain, records);
+      loginInProgress = true;
+      setLoginStatus('Checking DNS records...');
+      
+      try {
+        const txts = await fetchTXTRecords(myDomain);
         
-        myName.textContent = myProfile.name;
-        myDomainEl.textContent = `@${myDomain}`;
-        if (myProfile.avatar) {
-          myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+        if (txts.includes(currentChallenge)) {
+          setLoginStatus('✅ Verified! Loading...', 'success');
+          
+          const records = await fetchTXTRecords(myDomain);
+          myProfile = parseProfile(myDomain, records);
+          
+          myName.textContent = myProfile.name;
+          myDomainEl.textContent = `@${myDomain}`;
+          if (myProfile.avatar) {
+            myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+          } else {
+            myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+          }
+          
+          adminBadge.classList.add('hidden');
+          loadContacts();
+          loadMessages();
+          
+          // Start peer after a short delay
+          setTimeout(() => {
+            startPeer();
+          }, 100);
         } else {
-          myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+          setLoginStatus('❌ Code not found in DNS records', 'error');
+          loginInProgress = false;
         }
-        
-        adminBadge.classList.add('hidden');
-        loadContacts();
-        startPeer();
-      } else {
-        loginStatus.textContent = '❌ Code not found in DNS records';
+      } catch (error) {
+        setLoginStatus('❌ DNS check failed', 'error');
+        loginInProgress = false;
       }
     });
 
@@ -2064,17 +2168,23 @@
     // ============================================
     function startPeer() {
       try {
-        // FIXED: Use custom peer ID based on domain, no random suffix
+        setLoginStatus('Connecting to network...');
+        
         peer = new Peer(myDomain, {
           config: { iceServers: ICE_SERVERS }
         });
         
         peer.on('open', () => {
+          console.log('PeerJS connected with ID:', myDomain);
           loginScreen.classList.add('hidden');
           mainApp.classList.remove('hidden');
           connectionStatus.classList.remove('offline');
-          showToast('✅ Ready to connect!');
+          setLoginStatus('');
+          loginInProgress = false;
           
+          showToast('✅ Connected to network');
+          
+          // Generate QR code
           qrcode.innerHTML = '';
           new QRCode(qrcode, {
             text: myDomain,
@@ -2084,46 +2194,90 @@
           qrPeerId.textContent = myDomain;
           
           if (isAdmin) addAdminContacts();
-          connectToSavedContacts();
+          
+          // Connect to saved contacts after a short delay
+          setTimeout(() => {
+            connectToSavedContacts();
+          }, 2000);
+          
           startDiscovery();
           checkPin();
         });
         
-        peer.on('connection', (conn) => setupConnection(conn));
-        peer.on('call', (call) => handleIncomingCall(call));
+        peer.on('connection', (conn) => {
+          console.log('Incoming connection from:', conn.peer);
+          setupConnection(conn);
+        });
+        
+        peer.on('call', (call) => {
+          console.log('Incoming call from:', call.peer);
+          handleIncomingCall(call);
+        });
         
         peer.on('error', (err) => {
           console.error('Peer error:', err);
+          
           if (err.type === 'unavailable-id') {
-            // FIXED: Don't generate random suffix, just show error
-            showToast('Domain already in use. Try another domain.');
-          } else if (err.type === 'network') {
+            setLoginStatus('❌ Domain already in use. Try another domain.', 'error');
+            loginInProgress = false;
+            if (peer) {
+              peer.destroy();
+              peer = null;
+            }
+          } else if (err.type === 'network' || err.type === 'disconnected') {
             connectionStatus.classList.add('offline');
-            showToast('Network connection lost. Reconnecting...');
-            setTimeout(() => peer.reconnect(), 2000);
+            showToast('Network connection lost');
+            
+            // Try to reconnect
+            if (reconnectAttempts < 3) {
+              reconnectAttempts++;
+              setTimeout(() => {
+                if (peer && !peer.destroyed) {
+                  peer.reconnect();
+                }
+              }, 3000);
+            }
           }
         });
         
         peer.on('disconnected', () => {
+          console.log('Peer disconnected');
           connectionStatus.classList.add('offline');
-          showToast('Disconnected. Reconnecting...');
-          setTimeout(() => peer.reconnect(), 2000);
+          showToast('Disconnected from network');
+          
+          // Try to reconnect
+          if (reconnectAttempts < 3) {
+            reconnectAttempts++;
+            setTimeout(() => {
+              if (peer && !peer.destroyed) {
+                peer.reconnect();
+              }
+            }, 3000);
+          }
         });
         
       } catch (e) {
         console.error('Failed to start peer:', e);
-        showToast('Failed to start. Refresh the page.');
+        setLoginStatus('❌ Failed to connect. Refresh the page.', 'error');
+        loginInProgress = false;
       }
     }
 
     function connectToSavedContacts() {
+      let connected = 0;
+      
       contacts.forEach((contact, domain) => {
         if (domain !== myDomain && !connections.has(domain) && !pendingRequests.has(domain)) {
           setTimeout(() => {
             connectToPeer(domain, false);
-          }, Math.random() * 2000); // Stagger connections
+            connected++;
+          }, Math.random() * 2000);
         }
       });
+      
+      if (connected > 0) {
+        showToast(`Connecting to ${connected} saved contacts...`);
+      }
     }
 
     function addAdminContacts() {
@@ -2154,37 +2308,36 @@
         return;
       }
       
-      // Check if already connected
-      if (connections.has(peerId)) {
+      // Check if already connected or pending
+      if (connections.has(peerId) || pendingRequests.has(peerId)) {
         conn.close();
         return;
       }
       
-      // Set up connection with keepalive
       const connectionData = {
         conn: conn,
-        messageQueue: [],
         lastPing: Date.now(),
         reconnectAttempts: 0
       };
       
       conn.on('open', () => {
-        // Check if this is a pending outgoing connection
-        const isOutgoingPending = pendingRequests.get(peerId)?.type === 'outgoing';
+        console.log('Connection opened to:', peerId);
         
-        if (!isOutgoingPending && !connections.has(peerId)) {
-          // Send connection request
-          conn.send(JSON.stringify({
-            type: 'connection-request',
-            from: myDomain,
-            profile: myProfile,
-            timestamp: Date.now()
-          }));
-          pendingRequests.set(peerId, { type: 'outgoing', conn: conn, timestamp: Date.now() });
-        } else if (isOutgoingPending) {
-          // This is a response to our request
-          handleConnectionAccepted(peerId, conn);
-        }
+        // Send connection request
+        conn.send(JSON.stringify({
+          type: 'connection-request',
+          from: myDomain,
+          profile: myProfile,
+          timestamp: Date.now()
+        }));
+        
+        pendingRequests.set(peerId, { 
+          type: 'outgoing', 
+          conn: conn, 
+          timestamp: Date.now() 
+        });
+        
+        updateContactsList();
       });
       
       conn.on('data', (data) => {
@@ -2215,7 +2368,6 @@
             return;
           }
           if (obj.type === 'pong') {
-            // Calculate latency
             const latency = Date.now() - obj.timestamp;
             updateConnectionQuality(peerId, latency);
             return;
@@ -2267,7 +2419,7 @@
             return;
           }
         } catch (e) {
-          // Legacy text message format
+          // Legacy text message
           if (connections.has(peerId)) {
             const message = {
               id: generateMessageId(),
@@ -2280,7 +2432,6 @@
             };
             addMessage(peerId, message);
             
-            // Send delivery receipt
             conn.send(JSON.stringify({
               type: 'message-delivered',
               messageId: message.id,
@@ -2288,13 +2439,16 @@
             }));
             
             if (selectedContact !== peerId) {
-              showToast(`✉️ New message from ${contacts.get(peerId)?.name || peerId}`);
+              const contact = contacts.get(peerId);
+              showToast(`✉️ New message from ${contact?.name || peerId}`);
             }
           }
         }
       });
       
       conn.on('close', () => {
+        console.log('Connection closed to:', peerId);
+        
         if (connections.has(peerId)) {
           const contact = contacts.get(peerId);
           if (contact) {
@@ -2314,7 +2468,7 @@
         pendingRequests.delete(peerId);
       });
       
-      // Send periodic pings to check connection quality
+      // Ping interval
       const pingInterval = setInterval(() => {
         if (conn.open) {
           conn.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
@@ -2328,7 +2482,6 @@
     }
 
     function handleConnectionRequest(peerId, request, conn) {
-      // Don't accept self connections
       if (peerId === myDomain) {
         conn.close();
         return;
@@ -2336,6 +2489,11 @@
       
       if (connections.has(peerId)) {
         conn.send(JSON.stringify({ type: 'connection-accepted' }));
+        return;
+      }
+      
+      // Check if already have a pending request
+      if (pendingRequests.has(peerId)) {
         return;
       }
       
@@ -2378,14 +2536,14 @@
       
       updateContactsList();
       updateOnlineCount();
+      saveContacts();
+      
       showToast(`🔗 Connected to ${contact?.name || peerId}`);
       
       if (selectedContact === peerId) {
         currentChatStatus.className = 'online-indicator';
         sendBtn.disabled = false;
       }
-      
-      saveContacts();
     }
 
     function handleConnectionRejected(peerId) {
@@ -2416,7 +2574,7 @@
     }
 
     // ============================================
-    // MESSAGE HANDLING - FIXED with read receipts
+    // MESSAGE HANDLING - FIXED
     // ============================================
     function handleIncomingMessage(peerId, message) {
       addMessage(peerId, { ...message, status: 'delivered' });
@@ -2431,7 +2589,8 @@
       }
       
       if (selectedContact !== peerId) {
-        showToast(`✉️ New message from ${contacts.get(peerId)?.name || peerId}`);
+        const contact = contacts.get(peerId);
+        showToast(`✉️ New message from ${contact?.name || peerId}`);
       }
     }
 
@@ -2461,25 +2620,87 @@
       }
     }
 
-    function sendTypingIndicator(peerId) {
-      if (connections.has(peerId) && selectedContact === peerId) {
-        connections.get(peerId).conn.send(JSON.stringify({
-          type: 'typing',
-          from: myDomain,
-          timestamp: Date.now()
-        }));
+    function addMessage(domain, message) {
+      if (!messages.has(domain)) messages.set(domain, []);
+      messages.get(domain).push(message);
+      
+      if (selectedContact === domain) {
+        displayMessage(message, message.from === myDomain);
       }
+      
+      updateContactsList();
+      saveMessages();
     }
 
-    // Debounced typing indicator
-    let typingTimeout;
-    messageInput.addEventListener('input', () => {
-      if (selectedContact && connections.has(selectedContact)) {
-        clearTimeout(typingTimeout);
-        sendTypingIndicator(selectedContact);
-        typingTimeout = setTimeout(() => {}, 1000);
+    function displayMessage(message, isOwn) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
+      wrapper.dataset.messageId = message.id;
+      
+      const time = new Date(message.timestamp).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      let statusIcon = '';
+      if (isOwn) {
+        if (message.status === 'sending') {
+          statusIcon = '<i class="fas fa-clock message-status-icon sent" title="Sending"></i>';
+        } else if (message.status === 'delivered') {
+          statusIcon = '<i class="fas fa-check message-status-icon delivered" title="Delivered"></i>';
+        } else if (message.status === 'read') {
+          statusIcon = '<i class="fas fa-check-double message-status-icon read" title="Read"></i>';
+        }
       }
-    });
+      
+      if (message.type === 'text') {
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            ${message.text}
+            <div class="message-time">
+              ${time} ${statusIcon}
+            </div>
+          </div>
+        `;
+      } else if (message.type === 'file') {
+        let preview = '';
+        if (message.preview) {
+          preview = `<img src="${message.preview}" class="file-preview" alt="preview">`;
+        }
+        
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            <div class="message-file" onclick="downloadFile('${message.transferId}')">
+              <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
+              <div style="flex:1">
+                <div>${message.fileName}</div>
+                <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
+                ${message.progress ? `
+                  <div class="file-progress">
+                    <div class="file-progress-fill" style="width: ${message.progress}%"></div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            ${preview}
+            <div class="message-time">
+              ${time} ${statusIcon}
+            </div>
+          </div>
+        `;
+      }
+      
+      messagesContainer.appendChild(wrapper);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function refreshMessages(peerId) {
+      if (selectedContact === peerId) {
+        messagesContainer.innerHTML = '';
+        const msgs = messages.get(peerId) || [];
+        msgs.forEach(msg => displayMessage(msg, msg.from === myDomain));
+      }
+    }
 
     function sendMessage() {
       const text = messageInput.value.trim();
@@ -2506,7 +2727,7 @@
       messageInput.value = '';
       messageInput.style.height = 'auto';
       
-      // Mark as read if contact is selected
+      // Mark as read after sending
       setTimeout(() => {
         markMessagesAsRead(selectedContact);
       }, 500);
@@ -2530,12 +2751,128 @@
       }
     }
 
-    function refreshMessages(peerId) {
-      if (selectedContact === peerId) {
-        messagesContainer.innerHTML = '';
-        const msgs = messages.get(peerId) || [];
-        msgs.forEach(msg => displayMessage(msg, msg.from === myDomain));
+    function selectContact(domain) {
+      if (domain === myDomain) {
+        showToast('Cannot select yourself');
+        return;
       }
+      
+      selectedContact = domain;
+      const contact = contacts.get(domain);
+      
+      if (contact) {
+        currentChatName.innerHTML = `${contact.name} ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}`;
+        currentChatDomain.textContent = `@${domain}`;
+        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
+        
+        if (contact.connectionQuality) {
+          connectionQuality.className = `connection-quality ${contact.connectionQuality}`;
+          connectionQuality.classList.remove('hidden');
+        } else {
+          connectionQuality.classList.add('hidden');
+        }
+        
+        messagesContainer.innerHTML = '';
+        const contactMessages = messages.get(domain) || [];
+        contactMessages.forEach(msg => displayMessage(msg, msg.from === myDomain));
+        
+        document.getElementById('chatArea').classList.add('active');
+        updateContactsList();
+        sendBtn.disabled = !contact.online;
+        
+        // Mark messages as read
+        markMessagesAsRead(domain);
+      }
+    }
+
+    function updateContactsList() {
+      contactsList.innerHTML = '';
+      
+      const sorted = Array.from(contacts.values())
+        .filter(contact => contact.domain !== myDomain)
+        .sort((a, b) => {
+          if (a.online && !b.online) return -1;
+          if (!a.online && b.online) return 1;
+          return a.name.localeCompare(b.name);
+        });
+      
+      sorted.forEach(contact => {
+        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
+        const isSelected = selectedContact === contact.domain;
+        const isPending = pendingRequests.has(contact.domain);
+        const pendingType = pendingRequests.get(contact.domain)?.type;
+        
+        const div = document.createElement('div');
+        div.className = `contact-item ${isSelected ? 'selected' : ''} ${isPending ? 'pending' : ''}`;
+        div.onclick = () => selectContact(contact.domain);
+        
+        const unreadCount = messages.get(contact.domain)?.filter(m => 
+          m.from === contact.domain && m.status !== 'read'
+        ).length || 0;
+        
+        let statusIcon = '';
+        if (lastMsg && lastMsg.from === myDomain) {
+          if (lastMsg.status === 'sending') statusIcon = '🕒';
+          else if (lastMsg.status === 'delivered') statusIcon = '✓';
+          else if (lastMsg.status === 'read') statusIcon = '✓✓';
+        }
+        
+        let requestButtons = '';
+        if (isPending && pendingType === 'incoming') {
+          requestButtons = `
+            <div class="request-actions">
+              <button class="request-btn accept" onclick="event.stopPropagation(); acceptConnection('${contact.domain}')">
+                <i class="fas fa-check"></i> Accept
+              </button>
+              <button class="request-btn ignore" onclick="event.stopPropagation(); ignoreConnection('${contact.domain}')">
+                <i class="fas fa-times"></i> Ignore
+              </button>
+            </div>
+          `;
+        }
+        
+        div.innerHTML = `
+          <div class="contact-avatar">
+            ${contact.avatar 
+              ? `<img src="${contact.avatar}" alt="${contact.name}">`
+              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
+            }
+            ${isPending ? '<span class="request-badge"><i class="fas fa-clock"></i></span>' : ''}
+            ${unreadCount > 0 ? `<span style="position:absolute;top:-5px;right:-5px;background:var(--accent-blue);color:white;border-radius:50%;width:20px;height:20px;font-size:12px;display:flex;align-items:center;justify-content:center;">${unreadCount}</span>` : ''}
+          </div>
+          <div class="contact-details">
+            <div class="contact-name">
+              ${contact.name}
+              ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}
+              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
+            </div>
+            <div class="contact-domain">@${contact.domain}</div>
+            <div class="last-message">
+              ${statusIcon ? `<span style="margin-right:4px;">${statusIcon}</span>` : ''}
+              ${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}
+            </div>
+            ${requestButtons}
+          </div>
+          <div class="contact-actions">
+            <button class="contact-action-btn" onclick="event.stopPropagation(); deleteContact('${contact.domain}')">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        `;
+        
+        contactsList.appendChild(div);
+      });
+      
+      updateDiscoveredList();
+      updateOnlineCount();
+    }
+
+    function updateOnlineCount() {
+      let count = 0;
+      contacts.forEach(c => { 
+        if (c.online && c.domain !== myDomain) count++; 
+      });
+      onlineCount.textContent = count;
     }
 
     window.acceptConnection = function(peerId) {
@@ -2652,7 +2989,6 @@
 
     function handleCallRequest(peerId, request) {
       if (currentCall) {
-        // Auto-reject if busy
         if (connections.has(peerId)) {
           connections.get(peerId).conn.send(JSON.stringify({ 
             type: 'call-rejected',
@@ -2733,7 +3069,6 @@
       try {
         showToast('Starting call...');
         
-        // Request permissions first
         const constraints = {
           audio: {
             echoCancellation: true,
@@ -2748,7 +3083,6 @@
           } : false
         };
         
-        // Try to get user media with better error handling
         try {
           localStream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (err) {
@@ -2768,7 +3102,6 @@
           await enumerateDevices();
         }
         
-        // Make the call
         const call = peer.call(peerId, localStream, {
           metadata: {
             callType: withVideo ? 'video' : 'audio',
@@ -2802,14 +3135,13 @@
         
         call.on('error', (err) => {
           console.error('Call error:', err);
-          showToast('Call failed: ' + err.message);
+          showToast('Call failed');
           endCurrentCall();
         });
         
         if (withVideo) {
           showLocalVideo();
         } else {
-          // Audio only mode
           videoOverlay.classList.add('active');
           videoGrid.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white;">
@@ -2840,14 +3172,11 @@
     function handleIncomingCall(call) {
       const peerId = call.peer;
       
-      // Check if we have a pending incoming call for this peer
       if (currentCall && currentCall.peerId === peerId && currentCall.direction === 'incoming') {
         
-        // Answer the call
         if (localStream) {
           call.answer(localStream);
         } else {
-          // Get media first
           navigator.mediaDevices.getUserMedia({
             audio: true,
             video: currentCall.type === 'video' ? {
@@ -2887,7 +3216,6 @@
         
         currentCall.call = call;
       } else {
-        // Not expecting this call
         call.close();
       }
     }
@@ -2925,7 +3253,6 @@
     }
 
     function endCurrentCall() {
-      // Stop all media tracks
       if (localStream) {
         localStream.getTracks().forEach(track => {
           track.stop();
@@ -2934,29 +3261,24 @@
         localStream = null;
       }
       
-      // Close the call if it exists
       if (currentCall && currentCall.call) {
         currentCall.call.close();
       }
       
-      // Clear all media calls
       mediaCalls.forEach((data) => {
         if (data.call) data.call.close();
       });
       mediaCalls.clear();
       
-      // Clear UI
       videoGrid.innerHTML = '';
       videoOverlay.classList.remove('active');
       callOverlay.classList.remove('active');
       
-      // Stop timer
       if (callTimer) {
         clearInterval(callTimer);
         callTimer = null;
       }
       
-      // Send end call signal to peer
       if (currentCall && currentCall.peerId && connections.has(currentCall.peerId)) {
         const conn = connections.get(currentCall.peerId).conn;
         conn.send(JSON.stringify({ 
@@ -2974,12 +3296,10 @@
 
     window.endCurrentCall = endCurrentCall;
 
-    // Device enumeration
     async function enumerateDevices() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         
-        // Get cameras
         availableCameras = devices.filter(device => device.kind === 'videoinput');
         cameraSelect.innerHTML = '<option value="">📱 Camera</option>';
         availableCameras.forEach((camera, index) => {
@@ -2988,12 +3308,10 @@
           let label = camera.label || `Camera ${index + 1}`;
           if (label.toLowerCase().includes('front')) label = '🤳 Front Camera';
           if (label.toLowerCase().includes('back')) label = '📷 Rear Camera';
-          if (label.toLowerCase().includes('logitech')) label = '🎥 Webcam';
           option.text = label;
           cameraSelect.appendChild(option);
         });
         
-        // Get microphones
         availableMics = devices.filter(device => device.kind === 'audioinput');
         micSelect.innerHTML = '<option value="">🎤 Microphone</option>';
         availableMics.forEach((mic, index) => {
@@ -3001,8 +3319,6 @@
           option.value = mic.deviceId;
           let label = mic.label || `Microphone ${index + 1}`;
           if (label.toLowerCase().includes('default')) label = '🎤 Default';
-          if (label.toLowerCase().includes('headset')) label = '🎧 Headset';
-          if (label.toLowerCase().includes('phone')) label = '📱 Phone';
           option.text = label;
           micSelect.appendChild(option);
         });
@@ -3012,88 +3328,61 @@
       }
     }
 
-    // Camera switch
-    cameraSelect.addEventListener('change', async (e) => {
-      if (!localStream) return;
-      
-      const deviceId = e.target.value;
-      if (!deviceId) return;
-      
-      const videoTrack = localStream.getVideoTracks()[0];
-      if (videoTrack) videoTrack.stop();
-      
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: { 
-            deviceId: { exact: deviceId },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
-          }
-        });
-        
-        const newVideoTrack = newStream.getVideoTracks()[0];
-        localStream.removeTrack(videoTrack);
-        localStream.addTrack(newVideoTrack);
-        
-        const localVideo = document.querySelector('#video-local video');
-        if (localVideo) localVideo.srcObject = localStream;
-        
-        if (currentCall && currentCall.call && currentCall.call.peerConnection) {
-          const sender = currentCall.call.peerConnection.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) sender.replaceTrack(newVideoTrack);
-        }
-        
-        showToast('Camera switched');
-      } catch (err) {
-        console.error('Failed to switch camera:', err);
-        showToast('Failed to switch camera');
+    function showLocalVideo() {
+      videoOverlay.classList.add('active');
+      let wrapper = document.getElementById('video-local');
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = 'video-local';
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.srcObject = localStream;
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = 'You';
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
       }
-    });
+      updateVideoGridClass();
+    }
 
-    // Microphone switch
-    micSelect.addEventListener('change', async (e) => {
-      if (!localStream) return;
-      
-      const deviceId = e.target.value;
-      if (!deviceId) return;
-      
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (audioTrack) audioTrack.stop();
-      
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          audio: { deviceId: { exact: deviceId } },
-          video: false
-        });
-        
-        const newAudioTrack = newStream.getAudioTracks()[0];
-        localStream.removeTrack(audioTrack);
-        localStream.addTrack(newAudioTrack);
-        
-        if (currentCall && currentCall.call && currentCall.call.peerConnection) {
-          const sender = currentCall.call.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
-          if (sender) sender.replaceTrack(newAudioTrack);
-        }
-        
-        showToast('Microphone switched');
-      } catch (err) {
-        console.error('Failed to switch microphone:', err);
-        showToast('Failed to switch microphone');
+    function showRemoteVideo(domain, stream) {
+      videoOverlay.classList.add('active');
+      let wrapper = document.getElementById(`video-${domain}`);
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = `video-${domain}`;
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        const contact = contacts.get(domain);
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = contact?.name || domain;
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
       }
-    });
+      updateVideoGridClass();
+    }
 
-    // Toggle speaker
-    toggleSpeakerBtn.addEventListener('click', () => {
-      if (localStream) {
-        // This is handled by the browser's audio output selection
-        showToast('Audio output switched');
+    function updateVideoGridClass() {
+      const videoCount = videoGrid.children.length;
+      if (videoCount === 2) {
+        videoGrid.classList.add('has-two');
+      } else {
+        videoGrid.classList.remove('has-two');
       }
-    });
+    }
 
     // ============================================
-    // CHAT FUNCTIONS - FIXED
+    // CONNECTION FUNCTIONS
     // ============================================
     async function connectToPeer(domain, showToastMsg = true) {
       if (!domain) return;
@@ -3113,286 +3402,26 @@
       
       if (showToastMsg) showToast(`Connecting to ${domain}...`);
       
-      // Check DNS for peer ID
-      const txts = await fetchTXTRecords(domain);
-      let peerId = domain;
-      for (let txt of txts) {
-        if (txt.startsWith('hnschat-peer=')) {
-          peerId = txt.split('=')[1];
-          break;
-        }
-      }
-      
-      const conn = peer.connect(peerId);
-      setupConnection(conn);
-      closeModal();
-    }
-
-    function addMessage(domain, message) {
-      if (!messages.has(domain)) messages.set(domain, []);
-      messages.get(domain).push(message);
-      
-      if (selectedContact === domain) {
-        displayMessage(message, message.from === myDomain);
-      }
-      
-      updateContactsList();
-      
-      // Save messages to localStorage
-      saveMessages();
-    }
-
-    function displayMessage(message, isOwn) {
-      const wrapper = document.createElement('div');
-      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
-      wrapper.dataset.messageId = message.id;
-      
-      const time = new Date(message.timestamp).toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-      
-      let statusIcon = '';
-      if (isOwn) {
-        if (message.status === 'sending') {
-          statusIcon = '<i class="fas fa-clock message-status-icon sent" title="Sending"></i>';
-        } else if (message.status === 'delivered') {
-          statusIcon = '<i class="fas fa-check message-status-icon delivered" title="Delivered"></i>';
-        } else if (message.status === 'read') {
-          statusIcon = '<i class="fas fa-check-double message-status-icon read" title="Read"></i>';
-        }
-      }
-      
-      if (message.type === 'text') {
-        wrapper.innerHTML = `
-          <div class="message-bubble">
-            ${message.text}
-            <div class="message-time">
-              ${time} ${statusIcon}
-            </div>
-          </div>
-        `;
-      } else if (message.type === 'file') {
-        let preview = '';
-        if (message.preview) {
-          preview = `<img src="${message.preview}" class="file-preview" alt="preview">`;
-        } else if (message.fileType?.startsWith('image/') && message.dataUrl) {
-          preview = `<img src="${message.dataUrl}" class="file-preview" alt="preview">`;
-        }
-        
-        wrapper.innerHTML = `
-          <div class="message-bubble">
-            <div class="message-file" onclick="downloadFile('${message.transferId}')">
-              <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
-              <div style="flex:1">
-                <div>${message.fileName}</div>
-                <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
-                ${message.progress ? `
-                  <div class="file-progress">
-                    <div class="file-progress-fill" style="width: ${message.progress}%"></div>
-                  </div>
-                ` : ''}
-              </div>
-            </div>
-            ${preview}
-            <div class="message-time">
-              ${time} ${statusIcon}
-            </div>
-          </div>
-        `;
-      }
-      
-      messagesContainer.appendChild(wrapper);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    function selectContact(domain) {
-      if (domain === myDomain) {
-        showToast('Cannot select yourself');
-        return;
-      }
-      
-      selectedContact = domain;
-      const contact = contacts.get(domain);
-      
-      if (contact) {
-        currentChatName.innerHTML = `${contact.name} ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}`;
-        currentChatDomain.textContent = `@${domain}`;
-        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
-        
-        if (contact.connectionQuality) {
-          connectionQuality.className = `connection-quality ${contact.connectionQuality}`;
-          connectionQuality.classList.remove('hidden');
-        } else {
-          connectionQuality.classList.add('hidden');
-        }
-        
-        messagesContainer.innerHTML = '';
-        const contactMessages = messages.get(domain) || [];
-        contactMessages.forEach(msg => displayMessage(msg, msg.from === myDomain));
-        
-        document.getElementById('chatArea').classList.add('active');
-        updateContactsList();
-        sendBtn.disabled = !contact.online;
-        
-        // Mark messages as read
-        markMessagesAsRead(domain);
-      }
-    }
-
-    function updateContactsList() {
-      contactsList.innerHTML = '';
-      
-      const sorted = Array.from(contacts.values())
-        .filter(contact => contact.domain !== myDomain) // Never show self
-        .sort((a, b) => {
-          if (a.online && !b.online) return -1;
-          if (!a.online && b.online) return 1;
-          return a.name.localeCompare(b.name);
-        });
-      
-      sorted.forEach(contact => {
-        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
-        const isSelected = selectedContact === contact.domain;
-        const isPending = pendingRequests.has(contact.domain);
-        const pendingType = pendingRequests.get(contact.domain)?.type;
-        
-        const div = document.createElement('div');
-        div.className = `contact-item ${isSelected ? 'selected' : ''} ${isPending ? 'pending' : ''}`;
-        div.onclick = () => selectContact(contact.domain);
-        
-        // Count unread messages
-        const unreadCount = messages.get(contact.domain)?.filter(m => 
-          m.from === contact.domain && m.status !== 'read'
-        ).length || 0;
-        
-        let statusIcon = '';
-        if (lastMsg && lastMsg.from === myDomain) {
-          if (lastMsg.status === 'sending') statusIcon = '🕒';
-          else if (lastMsg.status === 'delivered') statusIcon = '✓';
-          else if (lastMsg.status === 'read') statusIcon = '✓✓';
-        }
-        
-        let requestButtons = '';
-        if (isPending && pendingType === 'incoming') {
-          requestButtons = `
-            <div class="request-actions">
-              <button class="request-btn accept" onclick="event.stopPropagation(); acceptConnection('${contact.domain}')">
-                <i class="fas fa-check"></i> Accept
-              </button>
-              <button class="request-btn ignore" onclick="event.stopPropagation(); ignoreConnection('${contact.domain}')">
-                <i class="fas fa-times"></i> Ignore
-              </button>
-            </div>
-          `;
-        }
-        
-        div.innerHTML = `
-          <div class="contact-avatar">
-            ${contact.avatar 
-              ? `<img src="${contact.avatar}" alt="${contact.name}">`
-              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
-            }
-            ${isPending ? '<span class="request-badge"><i class="fas fa-clock"></i></span>' : ''}
-            ${unreadCount > 0 ? `<span style="position:absolute;top:-5px;right:-5px;background:var(--accent-blue);color:white;border-radius:50%;width:20px;height:20px;font-size:12px;display:flex;align-items:center;justify-content:center;">${unreadCount}</span>` : ''}
-          </div>
-          <div class="contact-details">
-            <div class="contact-name">
-              ${contact.name}
-              ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}
-              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
-            </div>
-            <div class="contact-domain">@${contact.domain}</div>
-            <div class="last-message">
-              ${statusIcon ? `<span style="margin-right:4px;">${statusIcon}</span>` : ''}
-              ${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}
-            </div>
-            ${requestButtons}
-          </div>
-          <div class="contact-actions">
-            <button class="contact-action-btn" onclick="event.stopPropagation(); deleteContact('${contact.domain}')">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        `;
-        
-        contactsList.appendChild(div);
-      });
-      
-      updateDiscoveredList();
-      updateOnlineCount();
-    }
-
-    function updateDiscoveredList() {
-      if (discoveredPeers.size === 0) {
-        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
-        return;
-      }
-      
-      discoveredPeersList.innerHTML = '';
-      Array.from(discoveredPeers).forEach(domain => {
-        if (domain !== myDomain && !contacts.has(domain) && !pendingRequests.has(domain)) {
-          const div = document.createElement('div');
-          div.className = 'peer-item';
-          div.onclick = () => {
-            newPeerDomain.value = domain;
-            connectToPeer(domain);
-          };
-          div.innerHTML = `
-            <i class="fas fa-user"></i>
-            <div>
-              <div>${domain} ${ADMIN_USERS[domain] ? '<span class="admin-badge-small">ADMIN</span>' : ''}</div>
-              <small style="color: var(--text-muted);">
-                ${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}
-              </small>
-            </div>
-            <button class="contact-action-btn" style="margin-left: auto;">
-              <i class="fas fa-plus"></i>
-            </button>
-          `;
-          discoveredPeersList.appendChild(div);
-        }
-      });
-    }
-
-    function updateOnlineCount() {
-      let count = 0;
-      contacts.forEach(c => { 
-        if (c.online && c.domain !== myDomain) count++; 
-      });
-      onlineCount.textContent = count;
-    }
-
-    // Save messages to localStorage
-    function saveMessages() {
       try {
-        const messagesObj = {};
-        messages.forEach((msgs, domain) => {
-          messagesObj[domain] = msgs;
-        });
-        localStorage.setItem('nebula-messages', JSON.stringify(messagesObj));
-      } catch (e) {
-        console.error('Failed to save messages:', e);
-      }
-    }
-
-    // Load messages from localStorage
-    function loadMessages() {
-      const saved = localStorage.getItem('nebula-messages');
-      if (saved) {
-        try {
-          const messagesObj = JSON.parse(saved);
-          Object.entries(messagesObj).forEach(([domain, msgs]) => {
-            messages.set(domain, msgs);
-          });
-        } catch (e) {
-          console.error('Failed to load messages:', e);
+        const txts = await fetchTXTRecords(domain);
+        let peerId = domain;
+        for (let txt of txts) {
+          if (txt.startsWith('hnschat-peer=')) {
+            peerId = txt.split('=')[1];
+            break;
+          }
         }
+        
+        const conn = peer.connect(peerId);
+        setupConnection(conn);
+        closeModal();
+      } catch (e) {
+        showToast('Failed to connect');
       }
     }
 
     // ============================================
-    // SEARCH - FIXED
+    // SEARCH
     // ============================================
     searchInput.addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase().trim();
@@ -3402,7 +3431,6 @@
         item.style.display = (name.includes(term) || domain.includes(term)) ? 'flex' : 'none';
       });
       
-      // Show add button for new domains
       if (term && term.includes('.') && !contacts.has(term) && term !== myDomain) {
         searchAddBtn.classList.add('visible');
       } else {
@@ -3420,7 +3448,7 @@
     });
 
     // ============================================
-    // FILE TRANSFER - FIXED
+    // FILE TRANSFER
     // ============================================
     async function sendFile(file) {
       if (!selectedContact || !connections.has(selectedContact)) {
@@ -3430,16 +3458,14 @@
       
       const conn = connections.get(selectedContact).conn;
       const transferId = generateMessageId();
-      const chunkSize = 16384; // 16KB chunks
+      const chunkSize = 16384;
       const totalChunks = Math.ceil(file.size / chunkSize);
       
-      // Generate preview for images
       let preview = null;
       if (file.type.startsWith('image/')) {
         preview = await generateImagePreview(file);
       }
       
-      // Send file info
       conn.send(JSON.stringify({
         type: 'file-info',
         transferId,
@@ -3467,7 +3493,6 @@
       
       addMessage(selectedContact, message);
       
-      // Read and send file in chunks
       const reader = new FileReader();
       reader.onload = (e) => {
         const bytes = new Uint8Array(e.target.result);
@@ -3476,7 +3501,6 @@
         
         function sendNextChunk() {
           if (chunkIndex >= totalChunks) {
-            // Send completion message
             conn.send(JSON.stringify({
               type: 'file-complete',
               transferId,
@@ -3489,7 +3513,6 @@
           const end = Math.min(start + chunkSize, file.size);
           const chunk = bytes.slice(start, end);
           
-          // Convert to base64
           let binary = '';
           chunk.forEach(byte => binary += String.fromCharCode(byte));
           const base64Data = btoa(binary);
@@ -3504,7 +3527,6 @@
           
           message.progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
           
-          // Update UI
           if (selectedContact) {
             const msgs = messages.get(selectedContact) || [];
             const msgIndex = msgs.findIndex(m => m.transferId === transferId);
@@ -3518,7 +3540,6 @@
           
           chunkIndex++;
           
-          // Schedule next chunk with small delay
           if (chunkIndex < totalChunks) {
             setTimeout(sendNextChunk, 10);
           } else {
@@ -3598,7 +3619,6 @@
     }
 
     function handleFileComplete(domain, info) {
-      // File transfer complete
       showToast(`File received from ${contacts.get(domain)?.name || domain}`);
     }
 
@@ -3607,11 +3627,9 @@
       if (!transfer) return;
       
       try {
-        // Calculate total size
         let totalLength = 0;
         transfer.chunks.forEach(chunk => totalLength += chunk.length);
         
-        // Combine chunks
         const combined = new Uint8Array(totalLength);
         let offset = 0;
         transfer.chunks.forEach(chunk => {
@@ -3619,41 +3637,23 @@
           offset += chunk.length;
         });
         
-        // Create blob and URL
         const blob = new Blob([combined], { type: transfer.type });
         const url = URL.createObjectURL(blob);
         transfer.blobUrl = url;
         
-        // For images, create data URL for preview
-        if (transfer.type.startsWith('image/')) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            updateFileMessage(transferId, url, e.target.result);
-          };
-          reader.readAsDataURL(blob);
-        } else {
-          updateFileMessage(transferId, url);
+        const msgs = messages.get(transfer.peerId);
+        const msg = msgs?.find(m => m.transferId === transferId);
+        if (msg) {
+          msg.complete = true;
+          msg.blobUrl = url;
+          if (selectedContact === transfer.peerId) {
+            refreshMessages(transfer.peerId);
+          }
         }
         
         showToast('File received: ' + transfer.name);
       } catch (e) {
         console.error('Error completing file transfer:', e);
-      }
-    }
-
-    function updateFileMessage(transferId, blobUrl, dataUrl) {
-      const transfer = fileTransfers.get(transferId);
-      if (!transfer) return;
-      
-      const msgs = messages.get(transfer.peerId);
-      const msg = msgs?.find(m => m.transferId === transferId);
-      if (msg) {
-        msg.complete = true;
-        msg.blobUrl = blobUrl;
-        msg.dataUrl = dataUrl;
-        if (selectedContact === transfer.peerId) {
-          refreshMessages(transfer.peerId);
-        }
       }
     }
 
@@ -3677,13 +3677,11 @@
 
     function getFileIcon(filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return 'fa-image';
-      if (['mp4','avi','mov','mkv','webm'].includes(ext)) return 'fa-video';
-      if (['mp3','wav','flac','m4a','ogg'].includes(ext)) return 'fa-music';
+      if (['jpg','jpeg','png','gif','webp'].includes(ext)) return 'fa-image';
+      if (['mp4','avi','mov','mkv'].includes(ext)) return 'fa-video';
+      if (['mp3','wav','flac'].includes(ext)) return 'fa-music';
       if (['pdf'].includes(ext)) return 'fa-file-pdf';
       if (['doc','docx'].includes(ext)) return 'fa-file-word';
-      if (['xls','xlsx'].includes(ext)) return 'fa-file-excel';
-      if (['zip','rar','7z','tar','gz'].includes(ext)) return 'fa-file-archive';
       return 'fa-file';
     }
 
@@ -3702,11 +3700,10 @@
       chatMessages.forEach(msg => {
         const time = new Date(msg.timestamp).toLocaleString();
         const sender = msg.from === myDomain ? 'Me' : contact.name;
-        const status = msg.status ? ` [${msg.status}]` : '';
         if (msg.type === 'text') {
-          content += `[${time}] ${sender}: ${msg.text}${status}\n`;
+          content += `[${time}] ${sender}: ${msg.text}\n`;
         } else {
-          content += `[${time}] ${sender}: [File] ${msg.fileName}${status}\n`;
+          content += `[${time}] ${sender}: [File] ${msg.fileName}\n`;
         }
       });
       
@@ -3720,12 +3717,11 @@
     }
 
     // ============================================
-    // DISCOVERY - FIXED
+    // DISCOVERY
     // ============================================
     function startDiscovery() {
       const common = ['bob.hns', 'charlie.hns', 'alice.hns', 'example.hns', ...Object.keys(ADMIN_USERS)];
       
-      // Discover peers every 30 seconds
       setInterval(() => {
         common.forEach(async domain => {
           if (domain !== myDomain && !contacts.has(domain) && !connections.has(domain) && !pendingRequests.has(domain)) {
@@ -3743,6 +3739,38 @@
       }, 30000);
     }
 
+    function updateDiscoveredList() {
+      if (discoveredPeers.size === 0) {
+        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
+        return;
+      }
+      
+      discoveredPeersList.innerHTML = '';
+      Array.from(discoveredPeers).forEach(domain => {
+        if (domain !== myDomain && !contacts.has(domain) && !pendingRequests.has(domain)) {
+          const div = document.createElement('div');
+          div.className = 'peer-item';
+          div.onclick = () => {
+            newPeerDomain.value = domain;
+            connectToPeer(domain);
+          };
+          div.innerHTML = `
+            <i class="fas fa-user"></i>
+            <div>
+              <div>${domain} ${ADMIN_USERS[domain] ? '<span class="admin-badge-small">ADMIN</span>' : ''}</div>
+              <small style="color: var(--text-muted);">
+                ${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}
+              </small>
+            </div>
+            <button class="contact-action-btn" style="margin-left: auto;">
+              <i class="fas fa-plus"></i>
+            </button>
+          `;
+          discoveredPeersList.appendChild(div);
+        }
+      });
+    }
+
     // ============================================
     // MODAL FUNCTIONS
     // ============================================
@@ -3752,7 +3780,7 @@
     }
 
     // ============================================
-    // SETTINGS - PIN OFF BY DEFAULT
+    // SETTINGS
     // ============================================
     function initToggles() {
       const savedPin = localStorage.getItem('nebula-pin');
@@ -3844,9 +3872,7 @@
       if (confirm('Logout?')) {
         endCurrentCall();
         if (peer) peer.destroy();
-        localStorage.removeItem('nebula-domain');
-        localStorage.removeItem('nebula-challenge');
-        localStorage.removeItem('nebula-isAdmin');
+        localStorage.clear();
         location.reload();
       }
     });
@@ -3874,7 +3900,6 @@
 
     contactInfoBtn.addEventListener('click', () => {
       if (selectedContact) {
-        // Show contact info modal (simplified)
         const contact = contacts.get(selectedContact);
         if (contact) {
           showToast(`${contact.name} (@${selectedContact})`);
@@ -3889,7 +3914,7 @@
       const input = document.createElement('input');
       input.type = 'file';
       input.multiple = true;
-      input.accept = 'image/*,.pdf,.doc,.docx,.txt,.zip,.mp3,.mp4';
+      input.accept = 'image/*,.pdf,.doc,.docx,.txt';
       input.onchange = (e) => {
         Array.from(e.target.files).forEach(sendFile);
       };
@@ -3949,9 +3974,80 @@
       }
     });
 
+    toggleSpeakerBtn.addEventListener('click', () => {
+      showToast('Audio output switched');
+    });
+
     endCallBtn.addEventListener('click', endCurrentCall);
 
-    // Handle visibility change to pause video
+    cameraSelect.addEventListener('change', async (e) => {
+      if (!localStream) return;
+      
+      const deviceId = e.target.value;
+      if (!deviceId) return;
+      
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) videoTrack.stop();
+      
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { 
+            deviceId: { exact: deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          }
+        });
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        localStream.removeTrack(videoTrack);
+        localStream.addTrack(newVideoTrack);
+        
+        const localVideo = document.querySelector('#video-local video');
+        if (localVideo) localVideo.srcObject = localStream;
+        
+        if (currentCall && currentCall.call && currentCall.call.peerConnection) {
+          const sender = currentCall.call.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) sender.replaceTrack(newVideoTrack);
+        }
+        
+        showToast('Camera switched');
+      } catch (err) {
+        showToast('Failed to switch camera');
+      }
+    });
+
+    micSelect.addEventListener('change', async (e) => {
+      if (!localStream) return;
+      
+      const deviceId = e.target.value;
+      if (!deviceId) return;
+      
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) audioTrack.stop();
+      
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: deviceId } },
+          video: false
+        });
+        
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        localStream.removeTrack(audioTrack);
+        localStream.addTrack(newAudioTrack);
+        
+        if (currentCall && currentCall.call && currentCall.call.peerConnection) {
+          const sender = currentCall.call.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
+          if (sender) sender.replaceTrack(newAudioTrack);
+        }
+        
+        showToast('Microphone switched');
+      } catch (err) {
+        showToast('Failed to switch microphone');
+      }
+    });
+
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && localStream) {
         localStream.getVideoTracks().forEach(track => {
@@ -3964,7 +4060,6 @@
       }
     });
 
-    // Handle page unload
     window.addEventListener('beforeunload', () => {
       endCurrentCall();
     });
@@ -3981,9 +4076,8 @@
     // ============================================
     // INITIALIZE
     // ============================================
-    loadMessages();
     checkSavedLogin();
-    console.log('NEBULA ready - PIN is OFF by default');
+    console.log('NEBULA ready - Login fixed');
   </script>
 </body>
 </html>
