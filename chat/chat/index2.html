@@ -1828,7 +1828,7 @@
       
       try {
         // Using Google DNS over HTTPS for reliability
-        const fetchPromise = fetch(`https://dns.google/resolve?name=${domain}&type=TXT`);
+        const fetchPromise = fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
         const response = await Promise.race([fetchPromise, timeout]);
         const data = await response.json();
         
