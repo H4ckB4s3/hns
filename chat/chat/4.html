@@ -13,7 +13,7 @@
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    /* RESET & VARIABLES - same as before plus additions */
+    /* RESET & VARIABLES - same as before */
     * {
       margin: 0;
       padding: 0;
@@ -1649,10 +1649,6 @@
         <div class="toggle-switch active" id="autoReconnectToggle"></div>
       </div>
       <div class="settings-item">
-        <span>Public Directory</span>
-        <span id="directoryDomain">directory.hns</span>
-      </div>
-      <div class="settings-item">
         <span>Make me discoverable</span>
         <div class="toggle-switch" id="discoverableToggle"></div>
       </div>
@@ -1788,11 +1784,23 @@
       <input type="text" id="newPeerDomain" class="input-field" placeholder="bob.hns" inputmode="text" enterkeyhint="go">
     </div>
     
-    <button id="connectToPeerBtn" class="btn btn-primary">
-      <i class="fas fa-plug"></i> Connect
-    </button>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <button id="connectToPeerBtn" class="btn btn-primary" style="flex: 1; margin-bottom: 0;">
+        <i class="fas fa-plug"></i> Connect
+      </button>
+      <button id="cancelConnectBtn" class="btn btn-secondary" style="flex: 0 0 auto; margin-bottom: 0;">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
     
-    <h4 style="margin: 20px 0 10px;">Discovered Peers:</h4>
+    <div id="connectionStatus" class="hidden" style="text-align: center; margin: 12px 0; padding: 8px; background: var(--bg-tertiary); border-radius: 12px;">
+      <i class="fas fa-spinner fa-spin"></i> Connecting...
+      <button id="cancelConnectionBtn" style="margin-left: 8px; background: none; border: none; color: var(--accent-red); cursor: pointer;">
+        <i class="fas fa-times-circle"></i>
+      </button>
+    </div>
+    
+    <h4 style="margin: 20px 0 10px;">Discoverable Peers:</h4>
     <div class="peer-list-modal" id="discoveredPeersList">
       <div class="peer-item">
         <i class="fas fa-spinner fa-spin"></i> Scanning...
@@ -1859,7 +1867,7 @@
 
   <script>
     // ============================================
-    // CONFIGURATION - IMPROVED
+    // CONFIGURATION - FIXED
     // ============================================
     const STUN_SERVERS = [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -1877,8 +1885,8 @@
 
     const ICE_SERVERS = [...STUN_SERVERS, ...TURN_SERVERS];
 
-    // Public directory for discovery
-    const PUBLIC_DIRECTORY = "directory.hns";
+    // Local directory - stored in localStorage instead of DNS
+    const DIRECTORY_KEY = 'nebula-directory';
 
     // ============================================
     // ADMIN USERS
@@ -1889,7 +1897,7 @@
     };
 
     // ============================================
-    // STATE - IMPROVED
+    // STATE - FIXED
     // ============================================
     let peer = null;
     let myDomain = '';
@@ -1916,11 +1924,12 @@
     let pinAttempts = 0;
     let reconnectAttempts = new Map();
     let messageId = 0;
-    let lastSeen = new Map(); // domain -> timestamp
+    let lastSeen = new Map();
     let autoReconnect = true;
     let discoverable = false;
     let scannerStream = null;
     let touchStartX = 0;
+    let currentConnection = null; // Track active connection attempt
 
     // ============================================
     // DOM ELEMENTS
@@ -1972,6 +1981,9 @@
     const modalBackdrop = document.getElementById('modalBackdrop');
     const newPeerDomain = document.getElementById('newPeerDomain');
     const connectToPeerBtn = document.getElementById('connectToPeerBtn');
+    const cancelConnectBtn = document.getElementById('cancelConnectBtn');
+    const connectionStatusDiv = document.getElementById('connectionStatus');
+    const cancelConnectionBtn = document.getElementById('cancelConnectionBtn');
     const discoveredPeersList = document.getElementById('discoveredPeersList');
     const closeModalBtn = document.getElementById('closeModalBtn');
     
@@ -1986,7 +1998,6 @@
     const lastSeenEl = document.getElementById('lastSeen');
     const autoReconnectToggle = document.getElementById('autoReconnectToggle');
     const discoverableToggle = document.getElementById('discoverableToggle');
-    const directoryDomain = document.getElementById('directoryDomain');
     const pinToggle = document.getElementById('pinToggle');
     const pinSetup = document.getElementById('pinSetup');
     const pinCodeInput = document.getElementById('pinCode');
@@ -2032,6 +2043,7 @@
       }, duration);
     }
 
+    // DNS TXT lookup - FIXED to handle errors better
     async function fetchTXTRecords(domain) {
       if (ADMIN_USERS[domain]) return [];
       
@@ -2048,6 +2060,36 @@
         console.error('DNS error:', e);
         return [];
       }
+    }
+
+    // Local directory functions - NEW
+    function loadDirectory() {
+      const saved = localStorage.getItem(DIRECTORY_KEY);
+      if (saved) {
+        try {
+          const dir = JSON.parse(saved);
+          return new Set(dir);
+        } catch (e) {
+          return new Set();
+        }
+      }
+      return new Set();
+    }
+
+    function saveDirectory(peers) {
+      localStorage.setItem(DIRECTORY_KEY, JSON.stringify(Array.from(peers)));
+    }
+
+    function addToDirectory(domain) {
+      const dir = loadDirectory();
+      dir.add(domain);
+      saveDirectory(dir);
+    }
+
+    function removeFromDirectory(domain) {
+      const dir = loadDirectory();
+      dir.delete(domain);
+      saveDirectory(dir);
     }
 
     function parseProfile(domain, records, isAdminUser = false) {
@@ -2111,7 +2153,6 @@
       return `${Date.now()}-${messageId++}-${Math.random().toString(36).substring(2, 9)}`;
     }
 
-    // Format last seen time
     function formatLastSeen(timestamp) {
       if (!timestamp) return 'never';
       const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -2121,7 +2162,6 @@
       return `${Math.floor(seconds / 86400)}d ago`;
     }
 
-    // Update last seen
     function updateLastSeen(domain) {
       lastSeen.set(domain, Date.now());
       if (selectedContact === domain) {
@@ -2131,35 +2171,26 @@
     }
 
     // ============================================
-    // DISCOVERY - IMPROVED
+    // DISCOVERY - FIXED (local directory)
     // ============================================
-    async function discoverOnlinePeers() {
-      try {
-        const txts = await fetchTXTRecords(PUBLIC_DIRECTORY);
-        const online = txts
-          .filter(t => t.startsWith("peer="))
-          .map(t => t.split("=")[1])
-          .filter(d => d && d !== myDomain && !contacts.has(d));
-        
-        online.forEach(d => discoveredPeers.add(d));
-        updateDiscoveredList();
-        
-        if (online.length > 0) {
-          showToast(`Found ${online.length} new peers`);
-        }
-      } catch(e) {
-        console.log('Discovery error:', e);
+    function discoverOnlinePeers() {
+      const directory = loadDirectory();
+      const online = Array.from(directory)
+        .filter(d => d && d !== myDomain && !contacts.has(d) && !pendingRequests.has(d));
+      
+      online.forEach(d => discoveredPeers.add(d));
+      updateDiscoveredList();
+      
+      if (online.length > 0) {
+        showToast(`Found ${online.length} peers in directory`);
       }
     }
 
-    // Auto-publish to directory
-    async function publishToDirectory() {
+    function publishToDirectory() {
       if (!discoverable || !myDomain) return;
       
-      // In a real app, users would add this to their directory.hns TXT
-      const publishTxt = `peer=${myDomain}|name=${myProfile.name}|ts=${Date.now()}`;
-      console.log('Would publish:', publishTxt);
-      showToast("You are discoverable! Add this to directory.hns TXT");
+      addToDirectory(myDomain);
+      showToast("You are now discoverable in the local directory");
     }
 
     // ============================================
@@ -2358,7 +2389,7 @@
     });
 
     // ============================================
-    // PEERJS SETUP - IMPROVED
+    // PEERJS SETUP - FIXED
     // ============================================
     function startPeer() {
       try {
@@ -2370,10 +2401,9 @@
           console.log('PeerJS opened with ID:', id);
           loginScreen.classList.add('hidden');
           mainApp.classList.remove('hidden');
-          connectionStatus.classList.remove('offline');
+          document.getElementById('connectionStatus').classList.remove('offline');
           showToast('✅ Ready to connect!');
           
-          // Generate QR code
           qrcode.innerHTML = '';
           new QRCode(qrcode, {
             text: myDomain,
@@ -2384,16 +2414,13 @@
           
           if (isAdmin) addAdminContacts();
           
-          // Start discovery
           discoverOnlinePeers();
-          setInterval(discoverOnlinePeers, 45000);
+          setInterval(discoverOnlinePeers, 30000);
           
-          // Auto-connect to saved contacts
           setTimeout(() => {
             connectToSavedContacts();
           }, 1000);
           
-          // Publish to directory if enabled
           if (discoverable) {
             publishToDirectory();
           }
@@ -2419,11 +2446,10 @@
             loginScreen.classList.remove('hidden');
             mainApp.classList.add('hidden');
           } else if (err.type === 'network' || err.type === 'disconnected') {
-            connectionStatus.classList.add('offline');
+            document.getElementById('connectionStatus').classList.add('offline');
             showToast('Network connection lost. Reconnecting...');
             
             if (autoReconnect) {
-              // Exponential backoff
               const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.get('peer') || 0), 30000);
               reconnectAttempts.set('peer', (reconnectAttempts.get('peer') || 0) + 1);
               
@@ -2438,7 +2464,7 @@
         
         peer.on('disconnected', () => {
           console.log('Peer disconnected');
-          connectionStatus.classList.add('offline');
+          document.getElementById('connectionStatus').classList.add('offline');
           showToast('Disconnected. Reconnecting...');
           
           if (autoReconnect) {
@@ -2486,7 +2512,7 @@
     }
 
     // ============================================
-    // CONNECTION SETUP - IMPROVED
+    // CONNECTION SETUP - FIXED
     // ============================================
     function setupConnection(conn) {
       const peerId = conn.peer;
@@ -2510,6 +2536,12 @@
       
       conn.on('open', () => {
         console.log('Connection opened with:', peerId);
+        
+        // Hide connection status if this was a pending connection
+        if (currentConnection === peerId) {
+          connectionStatusDiv.classList.add('hidden');
+          currentConnection = null;
+        }
         
         const isOutgoingPending = pendingRequests.get(peerId)?.type === 'outgoing';
         
@@ -2602,6 +2634,7 @@
               return;
             }
           } catch (e) {
+            // Plain text message
             if (connections.has(peerId)) {
               const message = {
                 id: generateMessageId(),
@@ -2627,7 +2660,7 @@
           }
         } else if (data instanceof ArrayBuffer) {
           // Handle binary data (files)
-          handleBinaryData(peerId, data);
+          console.log('Received binary data from:', peerId);
         }
       });
       
@@ -2727,6 +2760,10 @@
 
     function handleConnectionRejected(peerId) {
       pendingRequests.delete(peerId);
+      if (currentConnection === peerId) {
+        connectionStatusDiv.classList.add('hidden');
+        currentConnection = null;
+      }
       showToast(`❌ Connection rejected by ${peerId}`);
       updateContactsList();
     }
@@ -2754,7 +2791,7 @@
     }
 
     // ============================================
-    // MESSAGE HANDLING - IMPROVED
+    // MESSAGE HANDLING
     // ============================================
     function handleIncomingMessage(peerId, message) {
       addMessage(peerId, { ...message, status: 'delivered' });
@@ -2941,7 +2978,7 @@
     };
 
     // ============================================
-    // QR SCANNER - NEW
+    // QR SCANNER
     // ============================================
     async function startScanner() {
       try {
@@ -2988,7 +3025,7 @@
     searchScanBtn.addEventListener('click', startScanner);
 
     // ============================================
-    // CALL HANDLING - IMPROVED
+    // CALL HANDLING
     // ============================================
     async function startVoiceCall() {
       if (!selectedContact) {
@@ -3511,7 +3548,7 @@
     }
 
     // ============================================
-    // CHAT FUNCTIONS - IMPROVED
+    // CHAT FUNCTIONS - FIXED
     // ============================================
     async function connectToPeer(domain, showToastMsg = true) {
       if (!domain) return;
@@ -3531,6 +3568,10 @@
       
       if (showToastMsg) showToast(`Connecting to ${domain}...`);
       
+      // Show connecting status
+      connectionStatusDiv.classList.remove('hidden');
+      currentConnection = domain;
+      
       const txts = await fetchTXTRecords(domain);
       let peerId = domain;
       for (let txt of txts) {
@@ -3542,7 +3583,24 @@
       
       const conn = peer.connect(peerId);
       setupConnection(conn);
-      closeModal();
+    }
+
+    // Cancel connection attempt
+    function cancelConnection() {
+      if (currentConnection && pendingRequests.has(currentConnection)) {
+        const pending = pendingRequests.get(currentConnection);
+        if (pending && pending.conn) {
+          pending.conn.close();
+        }
+        pendingRequests.delete(currentConnection);
+      }
+      connectionStatusDiv.classList.add('hidden');
+      currentConnection = null;
+      showToast('Connection cancelled');
+    }
+
+    if (cancelConnectionBtn) {
+      cancelConnectionBtn.addEventListener('click', cancelConnection);
     }
 
     function addMessage(domain, message) {
@@ -3697,6 +3755,10 @@
           `;
         }
         
+        const div = document.createElement('div');
+        div.className = `contact-item ${isSelected ? 'selected' : ''} ${isPending ? 'pending' : ''}`;
+        div.onclick = () => selectContact(contact.domain);
+        
         div.innerHTML = `
           <div class="contact-avatar">
             ${contact.avatar 
@@ -3736,34 +3798,34 @@
     }
 
     function updateDiscoveredList() {
-      if (discoveredPeers.size === 0) {
-        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
+      const directory = loadDirectory();
+      const discoverable = Array.from(directory)
+        .filter(d => d !== myDomain && !contacts.has(d) && !pendingRequests.has(d));
+      
+      if (discoverable.length === 0) {
+        discoveredPeersList.innerHTML = '<div class="peer-item">No discoverable peers</div>';
         return;
       }
       
       discoveredPeersList.innerHTML = '';
-      Array.from(discoveredPeers).forEach(domain => {
-        if (domain !== myDomain && !contacts.has(domain) && !pendingRequests.has(domain)) {
-          const div = document.createElement('div');
-          div.className = 'peer-item';
-          div.onclick = () => {
-            newPeerDomain.value = domain;
-            connectToPeer(domain);
-          };
-          div.innerHTML = `
-            <i class="fas fa-user"></i>
-            <div>
-              <div>${domain} ${ADMIN_USERS[domain] ? '<span class="admin-badge-small">ADMIN</span>' : ''}</div>
-              <small style="color: var(--text-muted);">
-                ${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}
-              </small>
-            </div>
-            <button class="contact-action-btn" style="margin-left: auto;">
-              <i class="fas fa-plus"></i>
-            </button>
-          `;
-          discoveredPeersList.appendChild(div);
-        }
+      discoverable.forEach(domain => {
+        const div = document.createElement('div');
+        div.className = 'peer-item';
+        div.onclick = () => {
+          newPeerDomain.value = domain;
+          connectToPeer(domain);
+        };
+        div.innerHTML = `
+          <i class="fas fa-user"></i>
+          <div>
+            <div>${domain} ${ADMIN_USERS[domain] ? '<span class="admin-badge-small">ADMIN</span>' : ''}</div>
+            <small style="color: var(--text-muted);">Click to connect</small>
+          </div>
+          <button class="contact-action-btn" style="margin-left: auto;">
+            <i class="fas fa-plus"></i>
+          </button>
+        `;
+        discoveredPeersList.appendChild(div);
       });
     }
 
@@ -3802,7 +3864,7 @@
     }
 
     // ============================================
-    // SEARCH - IMPROVED
+    // SEARCH
     // ============================================
     searchInput.addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase().trim();
@@ -3833,7 +3895,7 @@
     });
 
     // ============================================
-    // MOBILE SWIPE - NEW
+    // MOBILE SWIPE
     // ============================================
     document.getElementById('chatArea').addEventListener('touchstart', (e) => {
       touchStartX = e.touches[0].clientX;
@@ -3843,13 +3905,13 @@
       const touchEndX = e.changedTouches[0].clientX;
       const diffX = touchEndX - touchStartX;
       
-      if (diffX > 100) { // Swipe right
+      if (diffX > 100) {
         document.getElementById('chatArea').classList.remove('active');
       }
     }, { passive: true });
 
     // ============================================
-    // FILE TRANSFER - IMPROVED with binary
+    // FILE TRANSFER
     // ============================================
     async function sendFile(file) {
       if (!selectedContact || !connections.has(selectedContact)) {
@@ -3914,7 +3976,7 @@
           const end = Math.min(start + chunkSize, file.size);
           const chunk = bytes.slice(start, end);
           
-          // Send as binary for better performance
+          // Send as binary
           conn.send(chunk.buffer);
           
           message.progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
@@ -3938,11 +4000,6 @@
       };
       
       reader.readAsArrayBuffer(file);
-    }
-
-    function handleBinaryData(peerId, data) {
-      // Handle binary file chunks
-      console.log('Received binary data from:', peerId);
     }
 
     function generateImagePreview(file) {
@@ -4239,6 +4296,7 @@
       } else {
         discoverableToggle.classList.remove('active');
         localStorage.setItem('nebula-discoverable', 'false');
+        removeFromDirectory(myDomain);
       }
     });
 
@@ -4324,15 +4382,34 @@
       modalBackdrop.classList.add('active');
       updateDiscoveredList();
       
-      // Pre-fill with last searched domain
       const lastSearch = searchInput.value.trim();
       if (lastSearch && lastSearch.includes('.')) {
         newPeerDomain.value = lastSearch;
       }
     });
 
-    closeModalBtn.addEventListener('click', closeModal);
-    modalBackdrop.addEventListener('click', closeModal);
+    closeModalBtn.addEventListener('click', () => {
+      addPeerModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+      if (currentConnection) {
+        cancelConnection();
+      }
+    });
+
+    modalBackdrop.addEventListener('click', () => {
+      addPeerModal.classList.remove('active');
+      scannerModal.classList.remove('active');
+      settingsModal.classList.remove('active');
+      if (currentConnection) {
+        cancelConnection();
+      }
+      stopScanner();
+    });
+
+    cancelConnectBtn.addEventListener('click', () => {
+      addPeerModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+    });
 
     connectToPeerBtn.addEventListener('click', () => {
       connectToPeer(newPeerDomain.value.trim().toLowerCase());
@@ -4344,7 +4421,6 @@
       }
     });
 
-    // Paste detection for auto-connect
     newPeerDomain.addEventListener('paste', (e) => {
       setTimeout(() => {
         const domain = newPeerDomain.value.trim().toLowerCase();
@@ -4411,7 +4487,7 @@
     // ============================================
     loadMessages();
     checkSavedLogin();
-    console.log('NEBULA ready - All improvements applied!');
+    console.log('NEBULA ready - Directory is now local!');
   </script>
 </body>
 </html>
