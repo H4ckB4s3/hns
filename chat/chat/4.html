@@ -1,0 +1,4417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>NEBULA • HNS</title>
+  <!-- peerjs for WebRTC -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- QR Code -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- QR Scanner -->
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* RESET & VARIABLES - same as before plus additions */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg-primary: #0a0c10;
+      --bg-secondary: #1a1e24;
+      --bg-tertiary: #252b33;
+      --bg-hover: #2f3640;
+      --text-primary: #ffffff;
+      --text-secondary: #b0b3b8;
+      --text-muted: #8a8f99;
+      --accent-blue: #0088cc;
+      --accent-green: #25D366;
+      --accent-purple: #6e5be2;
+      --accent-red: #f15a5a;
+      --accent-orange: #f39c12;
+      --border-color: #2f3540;
+      --message-outgoing: #005e99;
+      --message-incoming: #262d36;
+      --online-indicator: #31a24c;
+      --safe-area-top: env(safe-area-inset-top);
+      --safe-area-bottom: env(safe-area-inset-bottom);
+      --request-pending: #f39c12;
+      --message-read: #34b7f1;
+      --message-sent: #8a8f99;
+      --message-delivered: #b0b3b8;
+      --quality-excellent: #31a24c;
+      --quality-good: #f39c12;
+      --quality-poor: #f15a5a;
+    }
+
+    body {
+      background: var(--bg-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text-primary);
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      position: fixed;
+      width: 100%;
+      touch-action: pan-y pinch-zoom;
+    }
+
+    /* LOGIN SCREEN */
+    .login-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .login-screen.hidden {
+      display: none;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 32px 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo h1 {
+      font-size: 48px;
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    .logo p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      color: var(--text-primary);
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-field:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .admin-badge {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--accent-purple);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 600;
+      opacity: 0.8;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .btn-primary:hover, .btn-primary:active {
+      background: #006699;
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover, .btn-secondary:active {
+      background: var(--bg-hover);
+      transform: scale(0.98);
+    }
+
+    .btn-admin {
+      background: var(--accent-purple);
+      color: white;
+    }
+
+    .btn-danger {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    .challenge-area {
+      margin-top: 24px;
+      padding: 20px;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .challenge-text {
+      font-family: monospace;
+      padding: 16px;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      margin: 12px 0;
+      word-break: break-all;
+      font-size: 24px;
+      text-align: center;
+      letter-spacing: 4px;
+    }
+
+    /* MAIN APP */
+    .main-app {
+      display: flex;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-secondary);
+    }
+
+    .main-app.hidden {
+      display: none;
+    }
+
+    /* PIN MODAL */
+    .pin-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .pin-modal.active {
+      display: flex;
+    }
+
+    .pin-box {
+      width: 100%;
+      max-width: 350px;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 32px 24px;
+      text-align: center;
+    }
+
+    .pin-display {
+      font-size: 32px;
+      letter-spacing: 8px;
+      margin: 20px 0;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+      font-family: monospace;
+    }
+
+    .pin-keypad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 20px 0;
+    }
+
+    .pin-key {
+      padding: 20px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .pin-key:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
+    }
+
+    /* SETTINGS MODAL */
+    .settings-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 24px;
+      z-index: 2500;
+      display: none;
+      overflow-y: auto;
+    }
+
+    .settings-modal.active {
+      display: block;
+    }
+
+    .settings-group {
+      margin: 20px 0;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+    }
+
+    .settings-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .settings-item:last-child {
+      border-bottom: none;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 24px;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .toggle-switch.active {
+      background: var(--accent-blue);
+    }
+
+    .toggle-switch:after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.3s;
+    }
+
+    .toggle-switch.active:after {
+      left: 28px;
+    }
+
+    .pin-input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .pin-input {
+      flex: 1;
+      padding: 12px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 16px;
+      text-align: center;
+      letter-spacing: 4px;
+    }
+
+    .distress-warning {
+      color: var(--accent-red);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 100%;
+      height: 100%;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease;
+      position: relative;
+      z-index: 100;
+    }
+
+    .sidebar.hidden {
+      transform: translateX(-100%);
+    }
+
+    @media (min-width: 768px) {
+      .sidebar {
+        width: 350px;
+        transform: none !important;
+        border-right: 1px solid var(--border-color);
+      }
+    }
+
+    .sidebar-header {
+      padding: 20px 16px;
+      padding-top: max(20px, var(--safe-area-top));
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-primary);
+    }
+
+    .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+      overflow: hidden;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-domain {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--online-indicator);
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.offline {
+      background: #9e9e9e;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    .settings-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    .settings-icon:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
+    }
+
+    .online-count {
+      margin: 8px 12px;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .online-count i {
+      color: var(--accent-green);
+    }
+
+    .search-box {
+      padding: 8px 12px;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 16px;
+      padding-right: 100px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      color: var(--text-primary);
+      outline: none;
+      font-size: 14px;
+    }
+
+    .search-actions {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      gap: 8px;
+    }
+
+    .search-add-btn, .search-scan-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--accent-blue);
+      border: none;
+      color: white;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .search-add-btn.visible, .search-scan-btn.visible {
+      display: flex;
+    }
+
+    .search-add-btn:active, .search-scan-btn:active {
+      transform: scale(0.95);
+    }
+
+    .contacts-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 4px;
+      background: var(--bg-secondary);
+      position: relative;
+    }
+
+    .contact-item:hover, .contact-item:active {
+      background: var(--bg-hover);
+    }
+
+    .contact-item.selected {
+      background: var(--bg-tertiary);
+      border-left: 3px solid var(--accent-blue);
+    }
+
+    .contact-item.pending {
+      border-left: 3px solid var(--accent-orange);
+    }
+
+    .contact-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      font-size: 18px;
+      font-weight: 600;
+      position: relative;
+    }
+
+    .contact-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .contact-avatar .request-badge {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-orange);
+      border: 2px solid var(--bg-secondary);
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .connection-quality-badge {
+      position: absolute;
+      bottom: -2px;
+      left: -2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--bg-secondary);
+    }
+
+    .connection-quality-badge.excellent {
+      background: var(--quality-excellent);
+    }
+
+    .connection-quality-badge.good {
+      background: var(--quality-good);
+    }
+
+    .connection-quality-badge.poor {
+      background: var(--quality-poor);
+    }
+
+    .contact-details {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .contact-name {
+      font-weight: 600;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .online-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--online-indicator);
+    }
+
+    .online-indicator.offline {
+      background: #9e9e9e;
+    }
+
+    .contact-domain {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .last-message {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .last-seen {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .message-status {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .message-status.read {
+      color: var(--message-read);
+    }
+
+    .contact-actions {
+      display: flex;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .contact-item:hover .contact-actions,
+    .contact-item:active .contact-actions {
+      opacity: 1;
+    }
+
+    .contact-action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .contact-action-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .request-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .request-btn {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .request-btn.accept {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .request-btn.ignore {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .add-peer-btn {
+      margin: 12px;
+      padding: 14px;
+      background: var(--accent-blue);
+      border: none;
+      border-radius: 16px;
+      color: white;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .add-peer-btn:active {
+      background: #006699;
+      transform: scale(0.98);
+    }
+
+    /* CHAT AREA */
+    .chat-area {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-secondary);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      z-index: 200;
+    }
+
+    .chat-area.active {
+      transform: translateX(0);
+    }
+
+    @media (min-width: 768px) {
+      .chat-area {
+        position: relative;
+        transform: none;
+        flex: 1;
+      }
+    }
+
+    .chat-header {
+      padding: 12px 16px;
+      padding-top: max(12px, var(--safe-area-top));
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-primary);
+    }
+
+    .back-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      border: none;
+      color: var(--text-primary);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .back-btn:active {
+      background: var(--bg-hover);
+      transform: scale(0.95);
+    }
+
+    @media (min-width: 768px) {
+      .back-btn {
+        display: none;
+      }
+    }
+
+    .chat-contact-info {
+      flex: 1;
+      min-width: 0;
+      cursor: pointer;
+    }
+
+    .chat-contact-name {
+      font-weight: 600;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chat-contact-domain {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .chat-actions {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chat-action-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .chat-action-btn:active {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      transform: scale(0.95);
+    }
+
+    .chat-action-btn.active {
+      color: var(--accent-blue);
+      background: rgba(0, 136, 204, 0.2);
+    }
+
+    .chat-action-btn.call-active {
+      color: var(--accent-green);
+      background: rgba(37, 211, 102, 0.2);
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .message-wrapper {
+      display: flex;
+      margin-bottom: 4px;
+      animation: messageSlide 0.2s ease;
+    }
+
+    @keyframes messageSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-wrapper.own {
+      justify-content: flex-end;
+    }
+
+    .message-bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 20px;
+      background: var(--message-incoming);
+      word-wrap: break-word;
+      font-size: 14px;
+      line-height: 1.4;
+      position: relative;
+    }
+
+    .message-wrapper.own .message-bubble {
+      background: var(--message-outgoing);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-wrapper:not(.own) .message-bubble {
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-align: right;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+
+    .message-status-icon {
+      font-size: 10px;
+    }
+
+    .message-status-icon.sent {
+      color: var(--message-sent);
+    }
+
+    .message-status-icon.delivered {
+      color: var(--message-delivered);
+    }
+
+    .message-status-icon.read {
+      color: var(--message-read);
+    }
+
+    .typing-indicator {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .typing-indicator.show {
+      display: flex;
+    }
+
+    .typing-dots::after {
+      content: '';
+      animation: typingDots 1.5s infinite;
+    }
+
+    @keyframes typingDots {
+      0% { content: ''; }
+      25% { content: '.'; }
+      50% { content: '..'; }
+      75% { content: '...'; }
+      100% { content: ''; }
+    }
+
+    .message-file {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 12px;
+      cursor: pointer;
+    }
+
+    .message-file:active {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .file-preview {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+
+    .file-progress {
+      width: 100%;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      margin-top: 8px;
+    }
+
+    .file-progress-fill {
+      height: 100%;
+      background: var(--accent-blue);
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    .input-area {
+      padding: 12px 16px;
+      padding-bottom: max(12px, var(--safe-area-bottom));
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      background: var(--bg-tertiary);
+      border-radius: 24px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+    }
+
+    .message-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 15px;
+      padding: 8px 0;
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+
+    .attach-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 20px;
+      padding: 0 8px;
+      cursor: pointer;
+    }
+
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent-blue);
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .send-btn:active {
+      background: #006699;
+      transform: scale(0.95);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .save-chat-btn {
+      background: var(--bg-tertiary);
+      border: none;
+      color: var(--text-primary);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 8px;
+    }
+
+    /* QR AREA */
+    .qr-area {
+      padding: 16px;
+      background: var(--bg-tertiary);
+      margin: 0 16px 16px;
+      border-radius: 16px;
+      text-align: center;
+      display: none;
+    }
+
+    .qr-area.show {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .qr-container {
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* QR SCANNER MODAL */
+    .scanner-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 3100;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .scanner-modal.active {
+      display: flex;
+    }
+
+    .scanner-container {
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 1;
+      background: var(--bg-tertiary);
+      border-radius: 32px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .scanner-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .scanner-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border: 2px solid var(--accent-blue);
+      border-radius: 32px;
+      pointer-events: none;
+    }
+
+    .scanner-close {
+      margin-top: 20px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: var(--accent-red);
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* CALL OVERLAY */
+    .call-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 2200;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .call-overlay.active {
+      display: flex;
+    }
+
+    .call-info {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .call-avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+    }
+
+    .call-status {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .call-timer {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .call-buttons {
+      display: flex;
+      gap: 20px;
+      margin-top: 30px;
+    }
+
+    .call-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .call-btn.accept {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .call-btn.decline {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    /* VIDEO CALL OVERLAY */
+    .video-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: black;
+      z-index: 2300;
+      display: none;
+      flex-direction: column;
+    }
+
+    .video-overlay.active {
+      display: flex;
+    }
+
+    .video-grid {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 2px;
+      background: black;
+      overflow: hidden;
+    }
+
+    .video-grid.has-two {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .video-wrapper {
+      position: relative;
+      background: #1a1a1a;
+      border-radius: 8px;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+    }
+
+    .video-wrapper video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .video-label {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      z-index: 10;
+    }
+
+    .video-controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      padding: 16px;
+      padding-bottom: max(16px, var(--safe-area-bottom));
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 20;
+    }
+
+    .video-control-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-tertiary);
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .video-control-btn:active {
+      transform: scale(0.9);
+    }
+
+    .video-control-btn.danger {
+      background: var(--accent-red);
+    }
+
+    .camera-select-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .camera-select {
+      background: var(--bg-tertiary);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 30px;
+      padding: 12px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      padding-right: 40px;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      max-width: 180px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .device-select {
+      background: var(--bg-tertiary);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 30px;
+      padding: 12px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      outline: none;
+      max-width: 150px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Desktop styles */
+    @media (min-width: 768px) {
+      .video-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 10px;
+        padding: 10px;
+      }
+      
+      .video-grid.has-two {
+        display: grid;
+      }
+      
+      .video-wrapper {
+        aspect-ratio: 4/3;
+      }
+    }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 3000;
+      display: none;
+      animation: toastSlide 0.3s ease;
+      white-space: nowrap;
+      max-width: 90%;
+      text-align: center;
+    }
+
+    @keyframes toastSlide {
+      from { bottom: 0; opacity: 0; }
+      to { bottom: 30px; opacity: 1; }
+    }
+
+    /* ADMIN BADGE */
+    .admin-badge-small {
+      background: var(--accent-purple);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 8px;
+      margin-left: 6px;
+    }
+
+    /* CONNECTION QUALITY */
+    .connection-quality {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-left: 4px;
+    }
+
+    .connection-quality.excellent {
+      background: var(--quality-excellent);
+    }
+
+    .connection-quality.good {
+      background: var(--quality-good);
+    }
+
+    .connection-quality.poor {
+      background: var(--quality-poor);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* MODAL BACKDROP */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 2400;
+      display: none;
+    }
+
+    .modal-backdrop.active {
+      display: block;
+    }
+
+    .modal-panel {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 400px;
+      max-height: 80vh;
+      background: var(--bg-secondary);
+      border-radius: 32px;
+      padding: 24px;
+      z-index: 2500;
+      display: none;
+      overflow-y: auto;
+    }
+
+    .modal-panel.active {
+      display: block;
+      animation: slideUp 0.3s ease;
+    }
+
+    .peer-list-modal {
+      max-height: 200px;
+      overflow-y: auto;
+      margin: 16px 0;
+    }
+
+    .peer-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+
+    .peer-item:hover {
+      background: var(--bg-hover);
+    }
+  </style>
+</head>
+<body>
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-box">
+      <div class="logo">
+        <h1>NEBULA</h1>
+        <p>HNS Messenger</p>
+      </div>
+      
+      <div class="input-group">
+        <input type="text" id="domainInput" class="input-field" placeholder="your-domain.hns" value="alice.hns" autocomplete="off" inputmode="text" enterkeyhint="go">
+        <span id="adminBadge" class="admin-badge hidden">ADMIN</span>
+      </div>
+      
+      <button id="loginBtn" class="btn btn-primary">
+        <i class="fas fa-key"></i> Verify Domain
+      </button>
+      
+      <button id="adminLoginBtn" class="btn btn-admin">
+        <i class="fas fa-user-shield"></i> Admin Login (No Verify)
+      </button>
+      
+      <div id="challengeArea" class="challenge-area hidden">
+        <p style="margin-bottom: 8px;">Add this 6-digit code as TXT record:</p>
+        <div id="challengeText" class="challenge-text"></div>
+        <button id="verifyBtn" class="btn btn-primary">
+          <i class="fas fa-check"></i> Verify Now
+        </button>
+        <button id="cancelVerifyBtn" class="btn btn-secondary" style="margin-top: 8px;">
+          Cancel
+        </button>
+      </div>
+      
+      <div id="loginStatus" style="text-align: center; margin-top: 16px; font-size: 14px; color: var(--text-muted);"></div>
+    </div>
+  </div>
+
+  <!-- PIN MODAL -->
+  <div id="pinModal" class="pin-modal">
+    <div class="pin-box">
+      <h3><i class="fas fa-lock"></i> Enter PIN</h3>
+      <div class="pin-display" id="pinDisplay">⚫⚫⚫⚫</div>
+      <div class="pin-keypad" id="pinKeypad"></div>
+      <button id="pinCancelBtn" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal" class="settings-modal">
+    <h3 style="margin-bottom: 20px;"><i class="fas fa-cog"></i> Settings</h3>
+    
+    <div class="settings-group">
+      <h4 style="margin-bottom: 12px;">Security</h4>
+      <div class="settings-item">
+        <span>PIN Protection</span>
+        <div class="toggle-switch" id="pinToggle"></div>
+      </div>
+      <div id="pinSetup" class="hidden">
+        <div class="pin-input-group">
+          <input type="password" id="pinCode" class="pin-input" placeholder="Enter 4-digit PIN" maxlength="4" pattern="\d*">
+          <button id="savePinBtn" class="btn btn-primary" style="margin: 0; padding: 12px;">Save</button>
+        </div>
+      </div>
+      <div class="settings-item">
+        <span>Distress Code</span>
+        <div class="toggle-switch" id="distressToggle"></div>
+      </div>
+      <div id="distressSetup" class="hidden">
+        <div class="pin-input-group">
+          <input type="password" id="distressCode" class="pin-input" placeholder="Enter 4-digit code" maxlength="4" pattern="\d*">
+          <button id="saveDistressBtn" class="btn btn-danger" style="margin: 0; padding: 12px;">Save</button>
+        </div>
+        <p class="distress-warning">⚠️ Distress code will DELETE ALL DATA</p>
+      </div>
+    </div>
+    
+    <div class="settings-group">
+      <h4 style="margin-bottom: 12px;">Connection</h4>
+      <div class="settings-item">
+        <span>Auto-reconnect</span>
+        <div class="toggle-switch active" id="autoReconnectToggle"></div>
+      </div>
+      <div class="settings-item">
+        <span>Public Directory</span>
+        <span id="directoryDomain">directory.hns</span>
+      </div>
+      <div class="settings-item">
+        <span>Make me discoverable</span>
+        <div class="toggle-switch" id="discoverableToggle"></div>
+      </div>
+    </div>
+    
+    <div class="settings-group">
+      <h4 style="margin-bottom: 12px;">Account</h4>
+      <div class="settings-item">
+        <span>Domain</span>
+        <span id="settingsDomain"></span>
+      </div>
+      <div class="settings-item">
+        <span>Name</span>
+        <span id="settingsName"></span>
+      </div>
+      <div class="settings-item">
+        <span>Last seen</span>
+        <span id="lastSeen">now</span>
+      </div>
+      <button id="logoutBtn" class="btn btn-danger" style="margin-top: 12px;">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </button>
+    </div>
+    
+    <button id="closeSettingsBtn" class="btn btn-secondary">Close</button>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="mainApp" class="main-app hidden">
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="avatar" id="myAvatar" onclick="document.getElementById('qrArea').classList.toggle('show')">
+          <span id="myAvatarText">A</span>
+        </div>
+        <div class="user-info">
+          <div class="user-name" id="myName">Loading...</div>
+          <div class="user-domain" id="myDomain"></div>
+        </div>
+        <div class="status-dot" id="connectionStatus"></div>
+        <div class="settings-icon" id="settingsBtn">
+          <i class="fas fa-cog"></i>
+        </div>
+      </div>
+      
+      <div class="online-count">
+        <i class="fas fa-circle"></i>
+        <span id="onlineCount">0</span> peers online
+      </div>
+      
+      <div class="search-box">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search or add domain..." inputmode="text" enterkeyhint="search">
+        <div class="search-actions">
+          <button id="searchScanBtn" class="search-scan-btn" title="Scan QR">
+            <i class="fas fa-camera"></i>
+          </button>
+          <button id="searchAddBtn" class="search-add-btn" title="Add peer">
+            <i class="fas fa-plus"></i>
+          </button>
+        </div>
+      </div>
+      
+      <div class="contacts-list" id="contactsList"></div>
+      
+      <button id="showAddPeerBtn" class="add-peer-btn">
+        <i class="fas fa-user-plus"></i> Add New Peer
+      </button>
+    </div>
+
+    <!-- CHAT AREA -->
+    <div class="chat-area" id="chatArea">
+      <div class="chat-header">
+        <button class="back-btn" id="backBtn">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        
+        <div class="chat-contact-info" id="contactInfoBtn">
+          <div class="chat-contact-name" id="currentChatName">
+            Select a contact
+            <span class="online-indicator offline" id="currentChatStatus"></span>
+          </div>
+          <div class="chat-contact-domain" id="currentChatDomain"></div>
+          <div id="connectionQuality" class="connection-quality hidden"></div>
+        </div>
+        
+        <div class="chat-actions">
+          <button class="chat-action-btn" id="audioCallBtn" title="Voice Call">
+            <i class="fas fa-phone"></i>
+          </button>
+          <button class="chat-action-btn" id="videoCallBtn" title="Video Call">
+            <i class="fas fa-video"></i>
+          </button>
+          <button class="chat-action-btn" id="qrToggleBtn" title="Show QR">
+            <i class="fas fa-qrcode"></i>
+          </button>
+          <button class="save-chat-btn" id="saveChatBtn">
+            <i class="fas fa-download"></i> Save
+          </button>
+        </div>
+      </div>
+      
+      <div class="qr-area" id="qrArea">
+        <div class="qr-container" id="qrcode"></div>
+        <p style="color: var(--text-muted); font-size: 12px;">Scan to connect: <span id="qrPeerId"></span></p>
+      </div>
+      
+      <div class="typing-indicator" id="typingIndicator">
+        <span id="typingName"></span><span class="typing-dots"></span>
+      </div>
+      
+      <div class="messages-container" id="messagesContainer"></div>
+      
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="messageInput" class="message-input" placeholder="Type a message..." rows="1" inputmode="text" enterkeyhint="send"></textarea>
+          <button class="attach-btn" id="attachBtn">
+            <i class="fas fa-paperclip"></i>
+          </button>
+        </div>
+        <button class="send-btn" id="sendBtn" disabled>
+          <i class="fas fa-arrow-up"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD PEER MODAL -->
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="modal-panel" id="addPeerModal">
+    <h3 style="margin-bottom: 20px;"><i class="fas fa-user-plus"></i> Add Peer</h3>
+    
+    <div class="input-group">
+      <input type="text" id="newPeerDomain" class="input-field" placeholder="bob.hns" inputmode="text" enterkeyhint="go">
+    </div>
+    
+    <button id="connectToPeerBtn" class="btn btn-primary">
+      <i class="fas fa-plug"></i> Connect
+    </button>
+    
+    <h4 style="margin: 20px 0 10px;">Discovered Peers:</h4>
+    <div class="peer-list-modal" id="discoveredPeersList">
+      <div class="peer-item">
+        <i class="fas fa-spinner fa-spin"></i> Scanning...
+      </div>
+    </div>
+    
+    <button id="closeModalBtn" class="btn btn-secondary" style="margin-top: 16px;">
+      Close
+    </button>
+  </div>
+
+  <!-- QR SCANNER MODAL -->
+  <div class="scanner-modal" id="scannerModal">
+    <div class="scanner-container">
+      <video id="scannerVideo" class="scanner-video" autoplay playsinline></video>
+      <div class="scanner-overlay"></div>
+    </div>
+    <button class="scanner-close" id="scannerCloseBtn">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <!-- CALL OVERLAY -->
+  <div class="call-overlay" id="callOverlay">
+    <div class="call-info">
+      <div class="call-avatar" id="callAvatar">
+        <span id="callAvatarText">?</span>
+      </div>
+      <div class="call-status" id="callStatus">Incoming call...</div>
+      <div class="call-timer" id="callTimer"></div>
+    </div>
+    <div class="call-buttons" id="callButtons"></div>
+  </div>
+
+  <!-- VIDEO CALL OVERLAY -->
+  <div class="video-overlay" id="videoOverlay">
+    <div class="video-grid" id="videoGrid"></div>
+    <div class="video-controls">
+      <div class="camera-select-container">
+        <select id="cameraSelect" class="camera-select">
+          <option value="">📱 Camera</option>
+        </select>
+        <select id="micSelect" class="device-select" style="margin-left: 8px;">
+          <option value="">🎤 Microphone</option>
+        </select>
+      </div>
+      <button class="video-control-btn" id="toggleMicBtn">
+        <i class="fas fa-microphone"></i>
+      </button>
+      <button class="video-control-btn" id="toggleCamBtn">
+        <i class="fas fa-video"></i>
+      </button>
+      <button class="video-control-btn" id="toggleSpeakerBtn" title="Speaker">
+        <i class="fas fa-volume-up"></i>
+      </button>
+      <button class="video-control-btn danger" id="endCallBtn">
+        <i class="fas fa-phone-slash"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ============================================
+    // CONFIGURATION - IMPROVED
+    // ============================================
+    const STUN_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
+    ];
+
+    // TURN servers for better connectivity
+    const TURN_SERVERS = [
+      { urls: 'turn:turn.nexus.ubq.fi:3478', username: 'nebula', credential: 'nebula2024' },
+      { urls: 'turn:turn1.nexus.ubq.fi:3478', username: 'nebula', credential: 'nebula2024' }
+    ];
+
+    const ICE_SERVERS = [...STUN_SERVERS, ...TURN_SERVERS];
+
+    // Public directory for discovery
+    const PUBLIC_DIRECTORY = "directory.hns";
+
+    // ============================================
+    // ADMIN USERS
+    // ============================================
+    const ADMIN_USERS = {
+      'admin1': { name: 'Admin One', avatar: null },
+      'admin2': { name: 'Admin Two', avatar: null }
+    };
+
+    // ============================================
+    // STATE - IMPROVED
+    // ============================================
+    let peer = null;
+    let myDomain = '';
+    let myProfile = null;
+    let currentChallenge = '';
+    let isAdmin = false;
+    let connections = new Map();
+    let mediaCalls = new Map();
+    let contacts = new Map();
+    let pendingRequests = new Map();
+    let messages = new Map();
+    let selectedContact = null;
+    let localStream = null;
+    let fileTransfers = new Map();
+    let discoveredPeers = new Set();
+    let availableCameras = [];
+    let availableMics = [];
+    let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    let currentCall = null;
+    let callTimer = null;
+    let callStartTime = null;
+    let pinCode = null;
+    let distressCode = null;
+    let pinAttempts = 0;
+    let reconnectAttempts = new Map();
+    let messageId = 0;
+    let lastSeen = new Map(); // domain -> timestamp
+    let autoReconnect = true;
+    let discoverable = false;
+    let scannerStream = null;
+    let touchStartX = 0;
+
+    // ============================================
+    // DOM ELEMENTS
+    // ============================================
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    const domainInput = document.getElementById('domainInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const adminLoginBtn = document.getElementById('adminLoginBtn');
+    const adminBadge = document.getElementById('adminBadge');
+    const challengeArea = document.getElementById('challengeArea');
+    const challengeText = document.getElementById('challengeText');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const cancelVerifyBtn = document.getElementById('cancelVerifyBtn');
+    const loginStatus = document.getElementById('loginStatus');
+    
+    const myAvatar = document.getElementById('myAvatar');
+    const myAvatarText = document.getElementById('myAvatarText');
+    const myName = document.getElementById('myName');
+    const myDomainEl = document.getElementById('myDomain');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const onlineCount = document.getElementById('onlineCount');
+    const searchInput = document.getElementById('searchInput');
+    const searchAddBtn = document.getElementById('searchAddBtn');
+    const searchScanBtn = document.getElementById('searchScanBtn');
+    const contactsList = document.getElementById('contactsList');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const currentChatName = document.getElementById('currentChatName');
+    const currentChatDomain = document.getElementById('currentChatDomain');
+    const currentChatStatus = document.getElementById('currentChatStatus');
+    const connectionQuality = document.getElementById('connectionQuality');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const typingName = document.getElementById('typingName');
+    const backBtn = document.getElementById('backBtn');
+    const contactInfoBtn = document.getElementById('contactInfoBtn');
+    const audioCallBtn = document.getElementById('audioCallBtn');
+    const videoCallBtn = document.getElementById('videoCallBtn');
+    const qrToggleBtn = document.getElementById('qrToggleBtn');
+    const saveChatBtn = document.getElementById('saveChatBtn');
+    const qrArea = document.getElementById('qrArea');
+    const qrcode = document.getElementById('qrcode');
+    const qrPeerId = document.getElementById('qrPeerId');
+    
+    const showAddPeerBtn = document.getElementById('showAddPeerBtn');
+    const addPeerModal = document.getElementById('addPeerModal');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const newPeerDomain = document.getElementById('newPeerDomain');
+    const connectToPeerBtn = document.getElementById('connectToPeerBtn');
+    const discoveredPeersList = document.getElementById('discoveredPeersList');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    
+    const scannerModal = document.getElementById('scannerModal');
+    const scannerVideo = document.getElementById('scannerVideo');
+    const scannerCloseBtn = document.getElementById('scannerCloseBtn');
+    
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsDomain = document.getElementById('settingsDomain');
+    const settingsName = document.getElementById('settingsName');
+    const lastSeenEl = document.getElementById('lastSeen');
+    const autoReconnectToggle = document.getElementById('autoReconnectToggle');
+    const discoverableToggle = document.getElementById('discoverableToggle');
+    const directoryDomain = document.getElementById('directoryDomain');
+    const pinToggle = document.getElementById('pinToggle');
+    const pinSetup = document.getElementById('pinSetup');
+    const pinCodeInput = document.getElementById('pinCode');
+    const savePinBtn = document.getElementById('savePinBtn');
+    const distressToggle = document.getElementById('distressToggle');
+    const distressSetup = document.getElementById('distressSetup');
+    const distressCodeInput = document.getElementById('distressCode');
+    const saveDistressBtn = document.getElementById('saveDistressBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    
+    const pinModal = document.getElementById('pinModal');
+    const pinDisplay = document.getElementById('pinDisplay');
+    const pinKeypad = document.getElementById('pinKeypad');
+    const pinCancelBtn = document.getElementById('pinCancelBtn');
+    
+    const callOverlay = document.getElementById('callOverlay');
+    const callAvatar = document.getElementById('callAvatar');
+    const callAvatarText = document.getElementById('callAvatarText');
+    const callStatus = document.getElementById('callStatus');
+    const callTimerEl = document.getElementById('callTimer');
+    const callButtons = document.getElementById('callButtons');
+    
+    const videoOverlay = document.getElementById('videoOverlay');
+    const videoGrid = document.getElementById('videoGrid');
+    const toggleMicBtn = document.getElementById('toggleMicBtn');
+    const toggleCamBtn = document.getElementById('toggleCamBtn');
+    const toggleSpeakerBtn = document.getElementById('toggleSpeakerBtn');
+    const endCallBtn = document.getElementById('endCallBtn');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const micSelect = document.getElementById('micSelect');
+    
+    const toast = document.getElementById('toast');
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    function showToast(message, duration = 2000) {
+      toast.textContent = message;
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, duration);
+    }
+
+    async function fetchTXTRecords(domain) {
+      if (ADMIN_USERS[domain]) return [];
+      
+      try {
+        const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
+        const data = await response.json();
+        if (data.Answer && data.Answer.length > 0) {
+          return data.Answer
+            .filter(record => record.type === 16)
+            .map(record => record.data.replace(/"/g, ''));
+        }
+        return [];
+      } catch (e) {
+        console.error('DNS error:', e);
+        return [];
+      }
+    }
+
+    function parseProfile(domain, records, isAdminUser = false) {
+      if (isAdminUser) {
+        return {
+          domain: domain,
+          name: ADMIN_USERS[domain].name,
+          avatar: null,
+          bio: 'Admin User',
+          isAdmin: true
+        };
+      }
+      
+      const profile = {
+        domain: domain,
+        name: domain.split('.')[0],
+        avatar: null,
+        bio: '',
+        isAdmin: false
+      };
+      
+      records.forEach(record => {
+        const [key, value] = record.split(':');
+        if (key === 'name') profile.name = value;
+        if (key === 'pfp') profile.avatar = `https://${value}`;
+        if (key === 'bio') profile.bio = value;
+      });
+      
+      return profile;
+    }
+
+    function saveContacts() {
+      const contactsArray = Array.from(contacts.values())
+        .filter(c => c.domain !== myDomain)
+        .map(c => ({
+          domain: c.domain,
+          name: c.name,
+          avatar: c.avatar,
+          isAdmin: c.isAdmin
+        }));
+      localStorage.setItem('nebula-contacts', JSON.stringify(contactsArray));
+    }
+
+    function loadContacts() {
+      const saved = localStorage.getItem('nebula-contacts');
+      if (saved) {
+        try {
+          const contactsArray = JSON.parse(saved);
+          contactsArray.forEach(c => {
+            if (c.domain !== myDomain) {
+              contacts.set(c.domain, { ...c, online: false });
+            }
+          });
+        } catch (e) {
+          console.error('Failed to load contacts:', e);
+        }
+      }
+    }
+
+    function generateMessageId() {
+      return `${Date.now()}-${messageId++}-${Math.random().toString(36).substring(2, 9)}`;
+    }
+
+    // Format last seen time
+    function formatLastSeen(timestamp) {
+      if (!timestamp) return 'never';
+      const seconds = Math.floor((Date.now() - timestamp) / 1000);
+      if (seconds < 60) return 'just now';
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+      return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
+    // Update last seen
+    function updateLastSeen(domain) {
+      lastSeen.set(domain, Date.now());
+      if (selectedContact === domain) {
+        lastSeenEl.textContent = formatLastSeen(lastSeen.get(domain));
+      }
+      updateContactsList();
+    }
+
+    // ============================================
+    // DISCOVERY - IMPROVED
+    // ============================================
+    async function discoverOnlinePeers() {
+      try {
+        const txts = await fetchTXTRecords(PUBLIC_DIRECTORY);
+        const online = txts
+          .filter(t => t.startsWith("peer="))
+          .map(t => t.split("=")[1])
+          .filter(d => d && d !== myDomain && !contacts.has(d));
+        
+        online.forEach(d => discoveredPeers.add(d));
+        updateDiscoveredList();
+        
+        if (online.length > 0) {
+          showToast(`Found ${online.length} new peers`);
+        }
+      } catch(e) {
+        console.log('Discovery error:', e);
+      }
+    }
+
+    // Auto-publish to directory
+    async function publishToDirectory() {
+      if (!discoverable || !myDomain) return;
+      
+      // In a real app, users would add this to their directory.hns TXT
+      const publishTxt = `peer=${myDomain}|name=${myProfile.name}|ts=${Date.now()}`;
+      console.log('Would publish:', publishTxt);
+      showToast("You are discoverable! Add this to directory.hns TXT");
+    }
+
+    // ============================================
+    // PIN FUNCTIONS
+    // ============================================
+    function checkPin() {
+      const savedPin = localStorage.getItem('nebula-pin');
+      const savedDistress = localStorage.getItem('nebula-distress');
+      
+      if (savedPin) {
+        pinCode = savedPin;
+        showPinModal();
+      }
+      if (savedDistress) {
+        distressCode = savedDistress;
+      }
+    }
+
+    function showPinModal() {
+      pinModal.classList.add('active');
+      let enteredPin = '';
+      pinDisplay.textContent = '⚫⚫⚫⚫';
+      
+      pinKeypad.innerHTML = '';
+      const keys = ['1','2','3','4','5','6','7','8','9','clear','0','backspace'];
+      
+      keys.forEach(key => {
+        const keyEl = document.createElement('div');
+        keyEl.className = 'pin-key';
+        keyEl.dataset.key = key;
+        if (key === 'clear') keyEl.textContent = 'C';
+        else if (key === 'backspace') keyEl.innerHTML = '<i class="fas fa-backspace"></i>';
+        else keyEl.textContent = key;
+        
+        keyEl.addEventListener('click', () => {
+          if (key === 'clear') {
+            enteredPin = '';
+          } else if (key === 'backspace') {
+            enteredPin = enteredPin.slice(0, -1);
+          } else if (key.length === 1 && !isNaN(key)) {
+            if (enteredPin.length < 4) enteredPin += key;
+          }
+          
+          pinDisplay.textContent = '⚫'.repeat(enteredPin.length) + '⚪'.repeat(4 - enteredPin.length);
+          
+          if (enteredPin.length === 4) {
+            if (enteredPin === distressCode) {
+              showToast('🧹 Wiping all data...');
+              localStorage.clear();
+              setTimeout(() => location.reload(), 1500);
+            } else if (enteredPin === pinCode) {
+              pinModal.classList.remove('active');
+              pinAttempts = 0;
+            } else {
+              pinAttempts++;
+              showToast(`Wrong PIN (${pinAttempts}/3)`);
+              enteredPin = '';
+              pinDisplay.textContent = '⚫⚫⚫⚫';
+              
+              if (pinAttempts >= 3) {
+                showToast('Too many attempts');
+                setTimeout(() => location.reload(), 1500);
+              }
+            }
+          }
+        });
+        
+        pinKeypad.appendChild(keyEl);
+      });
+      
+      pinCancelBtn.onclick = () => {
+        pinModal.classList.remove('active');
+      };
+    }
+
+    // ============================================
+    // LOGIN FLOW
+    // ============================================
+    function checkSavedLogin() {
+      const savedDomain = localStorage.getItem('nebula-domain');
+      const savedChallenge = localStorage.getItem('nebula-challenge');
+      const savedIsAdmin = localStorage.getItem('nebula-isAdmin') === 'true';
+      
+      if (savedDomain && savedChallenge) {
+        domainInput.value = savedDomain;
+        myDomain = savedDomain;
+        currentChallenge = savedChallenge;
+        isAdmin = savedIsAdmin;
+        
+        if (savedIsAdmin) {
+          adminLogin();
+        } else {
+          challengeText.textContent = currentChallenge;
+          challengeArea.classList.remove('hidden');
+          loginBtn.style.display = 'none';
+          loginStatus.textContent = 'Click verify to continue';
+        }
+      }
+    }
+
+    function adminLogin() {
+      const domain = domainInput.value.trim().toLowerCase();
+      if (!ADMIN_USERS[domain]) {
+        showToast('Invalid admin user');
+        return;
+      }
+      
+      isAdmin = true;
+      myDomain = domain;
+      myProfile = parseProfile(domain, [], true);
+      
+      localStorage.setItem('nebula-domain', domain);
+      localStorage.setItem('nebula-challenge', 'admin');
+      localStorage.setItem('nebula-isAdmin', 'true');
+      
+      myName.textContent = myProfile.name;
+      myDomainEl.textContent = `@${domain}`;
+      if (myProfile.avatar) {
+        myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+      } else {
+        myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+      }
+      
+      adminBadge.classList.remove('hidden');
+      loadContacts();
+      startPeer();
+    }
+
+    domainInput.addEventListener('input', () => {
+      challengeArea.classList.add('hidden');
+      loginBtn.style.display = 'block';
+      loginStatus.textContent = '';
+      
+      const domain = domainInput.value.trim().toLowerCase();
+      if (ADMIN_USERS[domain]) {
+        adminBadge.classList.remove('hidden');
+        adminLoginBtn.textContent = `Login as ${ADMIN_USERS[domain].name}`;
+      } else {
+        adminBadge.classList.add('hidden');
+        adminLoginBtn.textContent = 'Admin Login (No Verify)';
+      }
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      const domain = domainInput.value.trim().toLowerCase();
+      if (!domain) return;
+      
+      currentChallenge = Math.floor(100000 + Math.random() * 900000).toString();
+      myDomain = domain;
+      isAdmin = false;
+      
+      challengeText.textContent = currentChallenge;
+      challengeArea.classList.remove('hidden');
+      loginBtn.style.display = 'none';
+      loginStatus.textContent = 'Add this 6-digit code as TXT record';
+      
+      localStorage.setItem('nebula-domain', myDomain);
+      localStorage.setItem('nebula-challenge', currentChallenge);
+      localStorage.setItem('nebula-isAdmin', 'false');
+    });
+
+    adminLoginBtn.addEventListener('click', adminLogin);
+
+    cancelVerifyBtn.addEventListener('click', () => {
+      challengeArea.classList.add('hidden');
+      loginBtn.style.display = 'block';
+      loginStatus.textContent = '';
+      localStorage.removeItem('nebula-domain');
+      localStorage.removeItem('nebula-challenge');
+      localStorage.removeItem('nebula-isAdmin');
+    });
+
+    verifyBtn.addEventListener('click', async () => {
+      loginStatus.textContent = 'Checking DNS...';
+      const txts = await fetchTXTRecords(myDomain);
+      
+      if (txts.includes(currentChallenge)) {
+        loginStatus.textContent = '✅ Verified!';
+        const records = await fetchTXTRecords(myDomain);
+        myProfile = parseProfile(myDomain, records);
+        
+        myName.textContent = myProfile.name;
+        myDomainEl.textContent = `@${myDomain}`;
+        if (myProfile.avatar) {
+          myAvatar.innerHTML = `<img src="${myProfile.avatar}" alt="${myProfile.name}">`;
+        } else {
+          myAvatarText.textContent = myProfile.name.charAt(0).toUpperCase();
+        }
+        
+        adminBadge.classList.add('hidden');
+        loadContacts();
+        startPeer();
+      } else {
+        loginStatus.textContent = '❌ Code not found';
+      }
+    });
+
+    // ============================================
+    // PEERJS SETUP - IMPROVED
+    // ============================================
+    function startPeer() {
+      try {
+        peer = new Peer(myDomain, {
+          config: { iceServers: ICE_SERVERS }
+        });
+        
+        peer.on('open', (id) => {
+          console.log('PeerJS opened with ID:', id);
+          loginScreen.classList.add('hidden');
+          mainApp.classList.remove('hidden');
+          connectionStatus.classList.remove('offline');
+          showToast('✅ Ready to connect!');
+          
+          // Generate QR code
+          qrcode.innerHTML = '';
+          new QRCode(qrcode, {
+            text: myDomain,
+            width: 200,
+            height: 200
+          });
+          qrPeerId.textContent = myDomain;
+          
+          if (isAdmin) addAdminContacts();
+          
+          // Start discovery
+          discoverOnlinePeers();
+          setInterval(discoverOnlinePeers, 45000);
+          
+          // Auto-connect to saved contacts
+          setTimeout(() => {
+            connectToSavedContacts();
+          }, 1000);
+          
+          // Publish to directory if enabled
+          if (discoverable) {
+            publishToDirectory();
+          }
+          
+          checkPin();
+        });
+        
+        peer.on('connection', (conn) => {
+          console.log('Incoming connection from:', conn.peer);
+          setupConnection(conn);
+        });
+        
+        peer.on('call', (call) => {
+          console.log('Incoming call from:', call.peer);
+          handleIncomingCall(call);
+        });
+        
+        peer.on('error', (err) => {
+          console.error('Peer error:', err);
+          
+          if (err.type === 'unavailable-id') {
+            showToast('Domain already in use. Try another domain.');
+            loginScreen.classList.remove('hidden');
+            mainApp.classList.add('hidden');
+          } else if (err.type === 'network' || err.type === 'disconnected') {
+            connectionStatus.classList.add('offline');
+            showToast('Network connection lost. Reconnecting...');
+            
+            if (autoReconnect) {
+              // Exponential backoff
+              const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.get('peer') || 0), 30000);
+              reconnectAttempts.set('peer', (reconnectAttempts.get('peer') || 0) + 1);
+              
+              setTimeout(() => {
+                if (peer && peer.disconnected) {
+                  peer.reconnect();
+                }
+              }, delay);
+            }
+          }
+        });
+        
+        peer.on('disconnected', () => {
+          console.log('Peer disconnected');
+          connectionStatus.classList.add('offline');
+          showToast('Disconnected. Reconnecting...');
+          
+          if (autoReconnect) {
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.get('peer') || 0), 30000);
+            reconnectAttempts.set('peer', (reconnectAttempts.get('peer') || 0) + 1);
+            
+            setTimeout(() => {
+              if (peer && peer.disconnected) {
+                peer.reconnect();
+              }
+            }, delay);
+          }
+        });
+        
+      } catch (e) {
+        console.error('Failed to start peer:', e);
+        showToast('Failed to start. Refresh the page.');
+      }
+    }
+
+    function connectToSavedContacts() {
+      contacts.forEach((contact, domain) => {
+        if (domain !== myDomain && !connections.has(domain) && !pendingRequests.has(domain)) {
+          setTimeout(() => {
+            connectToPeer(domain, false);
+          }, Math.random() * 2000);
+        }
+      });
+    }
+
+    function addAdminContacts() {
+      Object.keys(ADMIN_USERS).forEach(admin => {
+        if (admin !== myDomain && !contacts.has(admin)) {
+          contacts.set(admin, {
+            domain: admin,
+            name: ADMIN_USERS[admin].name,
+            avatar: null,
+            isAdmin: true,
+            online: false
+          });
+        }
+      });
+      saveContacts();
+      updateContactsList();
+    }
+
+    // ============================================
+    // CONNECTION SETUP - IMPROVED
+    // ============================================
+    function setupConnection(conn) {
+      const peerId = conn.peer;
+      
+      if (peerId === myDomain) {
+        conn.close();
+        return;
+      }
+      
+      if (connections.has(peerId)) {
+        conn.close();
+        return;
+      }
+      
+      const connectionData = {
+        conn: conn,
+        messageQueue: [],
+        lastPing: Date.now(),
+        reconnectAttempts: 0
+      };
+      
+      conn.on('open', () => {
+        console.log('Connection opened with:', peerId);
+        
+        const isOutgoingPending = pendingRequests.get(peerId)?.type === 'outgoing';
+        
+        if (!isOutgoingPending && !connections.has(peerId)) {
+          conn.send(JSON.stringify({
+            type: 'connection-request',
+            from: myDomain,
+            profile: myProfile,
+            timestamp: Date.now()
+          }));
+          pendingRequests.set(peerId, { type: 'outgoing', conn: conn, timestamp: Date.now() });
+        } else if (isOutgoingPending) {
+          handleConnectionAccepted(peerId, conn);
+        }
+      });
+      
+      conn.on('data', (data) => {
+        if (typeof data === 'string') {
+          try {
+            const obj = JSON.parse(data);
+            
+            if (obj.type === 'connection-request') {
+              handleConnectionRequest(peerId, obj, conn);
+              return;
+            }
+            if (obj.type === 'connection-accepted') {
+              handleConnectionAccepted(peerId, conn);
+              return;
+            }
+            if (obj.type === 'connection-rejected') {
+              handleConnectionRejected(peerId);
+              return;
+            }
+            if (obj.type === 'profile') {
+              updateContactProfile(peerId, obj.profile);
+              return;
+            }
+            if (obj.type === 'ping') {
+              connectionData.lastPing = Date.now();
+              conn.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+              return;
+            }
+            if (obj.type === 'pong') {
+              const latency = Date.now() - obj.timestamp;
+              updateConnectionQuality(peerId, latency);
+              return;
+            }
+            if (obj.type === 'message') {
+              handleIncomingMessage(peerId, obj);
+              return;
+            }
+            if (obj.type === 'message-delivered') {
+              handleMessageDelivered(peerId, obj);
+              return;
+            }
+            if (obj.type === 'message-read') {
+              handleMessageRead(peerId, obj);
+              return;
+            }
+            if (obj.type === 'typing') {
+              handleTypingIndicator(peerId);
+              return;
+            }
+            if (obj.type === 'call-request') {
+              handleCallRequest(peerId, obj);
+              return;
+            }
+            if (obj.type === 'call-accepted') {
+              handleCallAccepted(peerId, obj);
+              return;
+            }
+            if (obj.type === 'call-rejected') {
+              handleCallRejected(peerId);
+              return;
+            }
+            if (obj.type === 'call-end') {
+              handleCallEnd(peerId);
+              return;
+            }
+            if (obj.type === 'file-info') {
+              handleFileInfo(peerId, obj);
+              return;
+            }
+            if (obj.type === 'file-chunk') {
+              handleFileChunk(peerId, obj);
+              return;
+            }
+            if (obj.type === 'file-complete') {
+              handleFileComplete(peerId, obj);
+              return;
+            }
+          } catch (e) {
+            if (connections.has(peerId)) {
+              const message = {
+                id: generateMessageId(),
+                type: 'text',
+                text: data,
+                from: peerId,
+                to: myDomain,
+                timestamp: Date.now(),
+                status: 'delivered'
+              };
+              addMessage(peerId, message);
+              
+              conn.send(JSON.stringify({
+                type: 'message-delivered',
+                messageId: message.id,
+                timestamp: Date.now()
+              }));
+              
+              if (selectedContact !== peerId) {
+                showToast(`✉️ New message from ${contacts.get(peerId)?.name || peerId}`);
+              }
+            }
+          }
+        } else if (data instanceof ArrayBuffer) {
+          // Handle binary data (files)
+          handleBinaryData(peerId, data);
+        }
+      });
+      
+      conn.on('close', () => {
+        console.log('Connection closed with:', peerId);
+        
+        if (connections.has(peerId)) {
+          const contact = contacts.get(peerId);
+          if (contact) {
+            contact.online = false;
+            contacts.set(peerId, contact);
+          }
+          connections.delete(peerId);
+          updateLastSeen(peerId);
+          updateContactsList();
+          updateOnlineCount();
+          
+          if (selectedContact === peerId) {
+            currentChatStatus.className = 'online-indicator offline';
+            sendBtn.disabled = true;
+            showToast(`👋 ${contact?.name || peerId} disconnected`);
+          }
+        }
+        pendingRequests.delete(peerId);
+      });
+      
+      const pingInterval = setInterval(() => {
+        if (conn.open) {
+          conn.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 10000);
+      
+      connectionData.pingInterval = pingInterval;
+      connections.set(peerId, connectionData);
+    }
+
+    function handleConnectionRequest(peerId, request, conn) {
+      if (peerId === myDomain) {
+        conn.close();
+        return;
+      }
+      
+      if (connections.has(peerId)) {
+        conn.send(JSON.stringify({ type: 'connection-accepted' }));
+        return;
+      }
+      
+      if (request.profile) {
+        contacts.set(peerId, { ...request.profile, online: false });
+      }
+      
+      pendingRequests.set(peerId, {
+        type: 'incoming',
+        conn: conn,
+        from: request.from,
+        timestamp: Date.now()
+      });
+      
+      updateContactsList();
+      showToast(`🔔 Connection request from ${request.from}`);
+    }
+
+    function handleConnectionAccepted(peerId, conn) {
+      connections.set(peerId, { conn });
+      pendingRequests.delete(peerId);
+      
+      const contact = contacts.get(peerId);
+      if (contact) {
+        contact.online = true;
+        contacts.set(peerId, contact);
+      }
+      
+      conn.send(JSON.stringify({ type: 'profile', profile: myProfile }));
+      
+      const messageQueue = messages.get(peerId)?.filter(m => m.status === 'sending') || [];
+      messageQueue.forEach(msg => {
+        conn.send(JSON.stringify({
+          type: 'message',
+          ...msg
+        }));
+      });
+      
+      updateLastSeen(peerId);
+      updateContactsList();
+      updateOnlineCount();
+      showToast(`🔗 Connected to ${contact?.name || peerId}`);
+      
+      if (selectedContact === peerId) {
+        currentChatStatus.className = 'online-indicator';
+        sendBtn.disabled = false;
+      }
+      
+      saveContacts();
+    }
+
+    function handleConnectionRejected(peerId) {
+      pendingRequests.delete(peerId);
+      showToast(`❌ Connection rejected by ${peerId}`);
+      updateContactsList();
+    }
+
+    function updateContactProfile(peerId, profile) {
+      contacts.set(peerId, { ...profile, online: true });
+      updateContactsList();
+      saveContacts();
+    }
+
+    function updateConnectionQuality(peerId, latency) {
+      const contact = contacts.get(peerId);
+      if (contact) {
+        let quality = 'excellent';
+        if (latency > 500) quality = 'poor';
+        else if (latency > 200) quality = 'good';
+        contact.connectionQuality = quality;
+        
+        if (selectedContact === peerId) {
+          connectionQuality.className = `connection-quality ${quality}`;
+          connectionQuality.classList.remove('hidden');
+        }
+        updateContactsList();
+      }
+    }
+
+    // ============================================
+    // MESSAGE HANDLING - IMPROVED
+    // ============================================
+    function handleIncomingMessage(peerId, message) {
+      addMessage(peerId, { ...message, status: 'delivered' });
+      
+      if (connections.has(peerId)) {
+        connections.get(peerId).conn.send(JSON.stringify({
+          type: 'message-delivered',
+          messageId: message.id,
+          timestamp: Date.now()
+        }));
+      }
+      
+      if (selectedContact !== peerId) {
+        showToast(`✉️ New message from ${contacts.get(peerId)?.name || peerId}`);
+      }
+    }
+
+    function handleMessageDelivered(peerId, receipt) {
+      const msgs = messages.get(peerId);
+      if (msgs) {
+        const msg = msgs.find(m => m.id === receipt.messageId);
+        if (msg && msg.status === 'sending') {
+          msg.status = 'delivered';
+          if (selectedContact === peerId) {
+            refreshMessages(peerId);
+          }
+        }
+      }
+    }
+
+    function handleMessageRead(peerId, receipt) {
+      const msgs = messages.get(peerId);
+      if (msgs) {
+        const msg = msgs.find(m => m.id === receipt.messageId);
+        if (msg) {
+          msg.status = 'read';
+          if (selectedContact === peerId) {
+            refreshMessages(peerId);
+          }
+        }
+      }
+    }
+
+    function handleTypingIndicator(peerId) {
+      if (selectedContact === peerId) {
+        const contact = contacts.get(peerId);
+        typingName.textContent = contact?.name || peerId;
+        typingIndicator.classList.add('show');
+        
+        clearTimeout(window.typingTimeout);
+        window.typingTimeout = setTimeout(() => {
+          typingIndicator.classList.remove('show');
+        }, 2000);
+      }
+    }
+
+    let typingTimeout;
+    messageInput.addEventListener('input', () => {
+      if (selectedContact && connections.has(selectedContact)) {
+        clearTimeout(typingTimeout);
+        connections.get(selectedContact).conn.send(JSON.stringify({
+          type: 'typing',
+          from: myDomain,
+          timestamp: Date.now()
+        }));
+        typingTimeout = setTimeout(() => {}, 1000);
+      }
+    });
+
+    function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || !selectedContact || !connections.has(selectedContact)) return;
+      
+      const messageId = generateMessageId();
+      const message = {
+        id: messageId,
+        type: 'text',
+        text: text,
+        from: myDomain,
+        to: selectedContact,
+        timestamp: Date.now(),
+        status: 'sending'
+      };
+      
+      const conn = connections.get(selectedContact).conn;
+      conn.send(JSON.stringify({
+        type: 'message',
+        ...message
+      }));
+      
+      addMessage(selectedContact, message);
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      
+      setTimeout(() => {
+        markMessagesAsRead(selectedContact);
+      }, 500);
+    }
+
+    function markMessagesAsRead(peerId) {
+      const msgs = messages.get(peerId);
+      if (msgs && connections.has(peerId)) {
+        const unread = msgs.filter(m => m.from === peerId && m.status !== 'read');
+        unread.forEach(msg => {
+          msg.status = 'read';
+          connections.get(peerId).conn.send(JSON.stringify({
+            type: 'message-read',
+            messageId: msg.id,
+            timestamp: Date.now()
+          }));
+        });
+        if (selectedContact === peerId) {
+          refreshMessages(peerId);
+        }
+      }
+    }
+
+    function refreshMessages(peerId) {
+      if (selectedContact === peerId) {
+        messagesContainer.innerHTML = '';
+        const msgs = messages.get(peerId) || [];
+        msgs.forEach(msg => displayMessage(msg, msg.from === myDomain));
+      }
+    }
+
+    window.acceptConnection = function(peerId) {
+      const pending = pendingRequests.get(peerId);
+      if (!pending) return;
+      
+      connections.set(peerId, { conn: pending.conn });
+      pending.conn.send(JSON.stringify({ type: 'connection-accepted' }));
+      
+      const contact = contacts.get(peerId);
+      if (contact) {
+        contact.online = true;
+        contacts.set(peerId, contact);
+      }
+      
+      pending.conn.send(JSON.stringify({ type: 'profile', profile: myProfile }));
+      pendingRequests.delete(peerId);
+      updateLastSeen(peerId);
+      updateContactsList();
+      updateOnlineCount();
+      saveContacts();
+      showToast(`🔗 Connected to ${contact?.name || peerId}`);
+      
+      if (selectedContact === peerId) {
+        currentChatStatus.className = 'online-indicator';
+        sendBtn.disabled = false;
+      }
+    };
+
+    window.ignoreConnection = function(peerId) {
+      const pending = pendingRequests.get(peerId);
+      if (!pending) return;
+      
+      pending.conn.send(JSON.stringify({ type: 'connection-rejected' }));
+      pending.conn.close();
+      pendingRequests.delete(peerId);
+      updateContactsList();
+      showToast(`Ignored connection from ${peerId}`);
+    };
+
+    window.deleteContact = function(domain) {
+      if (confirm(`Remove ${domain} from contacts?`)) {
+        contacts.delete(domain);
+        if (connections.has(domain)) {
+          connections.get(domain).conn.close();
+          connections.delete(domain);
+        }
+        pendingRequests.delete(domain);
+        if (selectedContact === domain) {
+          selectedContact = null;
+          currentChatName.textContent = 'Select a contact';
+          currentChatDomain.textContent = '';
+          currentChatStatus.className = 'online-indicator offline';
+          messagesContainer.innerHTML = '';
+        }
+        saveContacts();
+        updateContactsList();
+        updateOnlineCount();
+        showToast('Contact removed');
+      }
+    };
+
+    // ============================================
+    // QR SCANNER - NEW
+    // ============================================
+    async function startScanner() {
+      try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        });
+        scannerVideo.srcObject = scannerStream;
+        scannerModal.classList.add('active');
+        
+        const scanInterval = setInterval(() => {
+          if (scannerVideo.readyState === scannerVideo.HAVE_ENOUGH_DATA) {
+            const canvas = document.createElement('canvas');
+            canvas.width = scannerVideo.videoWidth;
+            canvas.height = scannerVideo.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(scannerVideo, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, canvas.width, canvas.height);
+            
+            if (code && code.data && code.data.includes('.')) {
+              clearInterval(scanInterval);
+              stopScanner();
+              connectToPeer(code.data.trim());
+            }
+          }
+        }, 500);
+        
+        scannerCloseBtn.onclick = stopScanner;
+        
+      } catch (err) {
+        console.error('Scanner error:', err);
+        showToast('Could not access camera');
+      }
+    }
+
+    function stopScanner() {
+      if (scannerStream) {
+        scannerStream.getTracks().forEach(track => track.stop());
+        scannerStream = null;
+      }
+      scannerModal.classList.remove('active');
+    }
+
+    searchScanBtn.addEventListener('click', startScanner);
+
+    // ============================================
+    // CALL HANDLING - IMPROVED
+    // ============================================
+    async function startVoiceCall() {
+      if (!selectedContact) {
+        showToast('Select a contact first');
+        return;
+      }
+      if (!connections.has(selectedContact)) {
+        showToast('User not connected');
+        return;
+      }
+      if (currentCall) {
+        showToast('Call already in progress');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      conn.send(JSON.stringify({ 
+        type: 'call-request', 
+        from: myDomain, 
+        callType: 'audio',
+        timestamp: Date.now()
+      }));
+      
+      showCallUI('outgoing', 'audio');
+    }
+
+    async function startVideoCall() {
+      if (!selectedContact) {
+        showToast('Select a contact first');
+        return;
+      }
+      if (!connections.has(selectedContact)) {
+        showToast('User not connected');
+        return;
+      }
+      if (currentCall) {
+        showToast('Call already in progress');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      conn.send(JSON.stringify({ 
+        type: 'call-request', 
+        from: myDomain, 
+        callType: 'video',
+        timestamp: Date.now()
+      }));
+      
+      showCallUI('outgoing', 'video');
+    }
+
+    function handleCallRequest(peerId, request) {
+      if (currentCall) {
+        if (connections.has(peerId)) {
+          connections.get(peerId).conn.send(JSON.stringify({ 
+            type: 'call-rejected',
+            reason: 'busy'
+          }));
+        }
+        return;
+      }
+      
+      const contact = contacts.get(peerId) || { name: peerId };
+      callAvatarText.textContent = contact.name.charAt(0).toUpperCase();
+      callStatus.textContent = `${contact.name} is calling...`;
+      callButtons.innerHTML = `
+        <button class="call-btn accept" onclick="acceptCall('${peerId}', '${request.callType}')">
+          <i class="fas fa-phone"></i>
+        </button>
+        <button class="call-btn decline" onclick="rejectCall('${peerId}')">
+          <i class="fas fa-times"></i>
+        </button>
+      `;
+      callOverlay.classList.add('active');
+      currentCall = { 
+        peerId: peerId, 
+        type: request.callType, 
+        direction: 'incoming',
+        timestamp: Date.now()
+      };
+      
+      setTimeout(() => {
+        if (currentCall && currentCall.peerId === peerId && currentCall.direction === 'incoming') {
+          rejectCall(peerId);
+        }
+      }, 30000);
+    }
+
+    function handleCallAccepted(peerId, request) {
+      callOverlay.classList.remove('active');
+      startMediaCall(peerId, request.callType === 'video');
+    }
+
+    function handleCallRejected(peerId) {
+      callOverlay.classList.remove('active');
+      showToast('Call rejected');
+      currentCall = null;
+    }
+
+    function handleCallEnd(peerId) {
+      if (currentCall && currentCall.peerId === peerId) {
+        showToast('Call ended by other user');
+        endCurrentCall();
+      }
+    }
+
+    window.acceptCall = function(peerId, callType) {
+      callOverlay.classList.remove('active');
+      if (connections.has(peerId)) {
+        connections.get(peerId).conn.send(JSON.stringify({ 
+          type: 'call-accepted', 
+          callType: callType 
+        }));
+      }
+      startMediaCall(peerId, callType === 'video');
+    };
+
+    window.rejectCall = function(peerId) {
+      callOverlay.classList.remove('active');
+      if (connections.has(peerId)) {
+        connections.get(peerId).conn.send(JSON.stringify({ 
+          type: 'call-rejected',
+          reason: 'declined'
+        }));
+      }
+      currentCall = null;
+    };
+
+    async function startMediaCall(peerId, withVideo) {
+      try {
+        showToast('Starting call...');
+        
+        const constraints = {
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: withVideo ? {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+            facingMode: 'user'
+          } : false
+        };
+        
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (err) {
+          console.error('Media error:', err);
+          if (err.name === 'NotAllowedError') {
+            showToast('Please allow camera/microphone access');
+          } else if (err.name === 'NotFoundError') {
+            showToast('No camera/microphone found');
+          } else {
+            showToast('Could not access media devices');
+          }
+          endCurrentCall();
+          return;
+        }
+        
+        if (withVideo) {
+          await enumerateDevices();
+        }
+        
+        const call = peer.call(peerId, localStream, {
+          metadata: {
+            callType: withVideo ? 'video' : 'audio',
+            caller: myDomain,
+            timestamp: Date.now()
+          }
+        });
+        
+        let callEstablished = false;
+        const callTimeout = setTimeout(() => {
+          if (!callEstablished) {
+            showToast('Call timed out');
+            call.close();
+            endCurrentCall();
+          }
+        }, 30000);
+        
+        call.on('stream', (remoteStream) => {
+          clearTimeout(callTimeout);
+          callEstablished = true;
+          
+          if (withVideo) {
+            showRemoteVideo(peerId, remoteStream);
+          }
+          startCallTimer();
+        });
+        
+        call.on('close', () => {
+          handleCallEnd(peerId);
+        });
+        
+        call.on('error', (err) => {
+          console.error('Call error:', err);
+          showToast('Call failed');
+          endCurrentCall();
+        });
+        
+        if (withVideo) {
+          showLocalVideo();
+        } else {
+          videoOverlay.classList.add('active');
+          videoGrid.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: white;">
+              <div style="text-align: center;">
+                <i class="fas fa-phone-alt" style="font-size: 48px; margin-bottom: 16px;"></i>
+                <div>Voice call with ${contacts.get(peerId)?.name || peerId}</div>
+              </div>
+            </div>
+          `;
+          startCallTimer();
+        }
+        
+        currentCall = {
+          peerId: peerId,
+          type: withVideo ? 'video' : 'audio',
+          direction: 'outgoing',
+          call: call,
+          startTime: Date.now()
+        };
+        
+      } catch (err) {
+        console.error('Failed to start call:', err);
+        showToast('Failed to start call');
+        endCurrentCall();
+      }
+    }
+
+    function handleIncomingCall(call) {
+      const peerId = call.peer;
+      
+      if (currentCall && currentCall.peerId === peerId && currentCall.direction === 'incoming') {
+        
+        if (localStream) {
+          call.answer(localStream);
+        } else {
+          navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: currentCall.type === 'video' ? {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 }
+            } : false
+          }).then(stream => {
+            localStream = stream;
+            call.answer(stream);
+            
+            if (currentCall.type === 'video') {
+              showLocalVideo();
+            }
+          }).catch(err => {
+            console.error('Failed to get media:', err);
+            call.close();
+            endCurrentCall();
+          });
+        }
+        
+        call.on('stream', (remoteStream) => {
+          if (currentCall.type === 'video') {
+            showRemoteVideo(peerId, remoteStream);
+          }
+          startCallTimer();
+        });
+        
+        call.on('close', () => {
+          handleCallEnd(peerId);
+        });
+        
+        call.on('error', (err) => {
+          console.error('Call error:', err);
+          endCurrentCall();
+        });
+        
+        currentCall.call = call;
+      } else {
+        call.close();
+      }
+    }
+
+    function showCallUI(direction, type) {
+      const contact = contacts.get(selectedContact) || { name: selectedContact };
+      callAvatarText.textContent = contact.name.charAt(0).toUpperCase();
+      callStatus.textContent = direction === 'outgoing' ? 'Calling...' : 'Incoming call...';
+      
+      if (direction === 'outgoing') {
+        callButtons.innerHTML = `
+          <button class="call-btn decline" onclick="endCurrentCall()">
+            <i class="fas fa-times"></i> Cancel
+          </button>
+        `;
+      }
+      
+      callOverlay.classList.add('active');
+    }
+
+    function startCallTimer() {
+      callStartTime = Date.now();
+      callTimerEl.textContent = '00:00';
+      callTimerEl.style.display = 'block';
+      callStatus.style.display = 'none';
+      
+      if (callTimer) clearInterval(callTimer);
+      
+      callTimer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        callTimerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }, 1000);
+    }
+
+    function endCurrentCall() {
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
+        localStream = null;
+      }
+      
+      if (currentCall && currentCall.call) {
+        currentCall.call.close();
+      }
+      
+      mediaCalls.forEach((data) => {
+        if (data.call) data.call.close();
+      });
+      mediaCalls.clear();
+      
+      videoGrid.innerHTML = '';
+      videoOverlay.classList.remove('active');
+      callOverlay.classList.remove('active');
+      
+      if (callTimer) {
+        clearInterval(callTimer);
+        callTimer = null;
+      }
+      
+      if (currentCall && currentCall.peerId && connections.has(currentCall.peerId)) {
+        const conn = connections.get(currentCall.peerId).conn;
+        conn.send(JSON.stringify({ 
+          type: 'call-end',
+          timestamp: Date.now()
+        }));
+      }
+      
+      currentCall = null;
+      callStartTime = null;
+      callTimerEl.textContent = '';
+      callTimerEl.style.display = 'none';
+      callStatus.style.display = 'block';
+    }
+
+    window.endCurrentCall = endCurrentCall;
+
+    async function enumerateDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        
+        availableCameras = devices.filter(device => device.kind === 'videoinput');
+        cameraSelect.innerHTML = '<option value="">📱 Camera</option>';
+        availableCameras.forEach((camera, index) => {
+          const option = document.createElement('option');
+          option.value = camera.deviceId;
+          let label = camera.label || `Camera ${index + 1}`;
+          if (label.toLowerCase().includes('front')) label = '🤳 Front Camera';
+          if (label.toLowerCase().includes('back')) label = '📷 Rear Camera';
+          option.text = label;
+          cameraSelect.appendChild(option);
+        });
+        
+        availableMics = devices.filter(device => device.kind === 'audioinput');
+        micSelect.innerHTML = '<option value="">🎤 Microphone</option>';
+        availableMics.forEach((mic, index) => {
+          const option = document.createElement('option');
+          option.value = mic.deviceId;
+          let label = mic.label || `Microphone ${index + 1}`;
+          if (label.toLowerCase().includes('default')) label = '🎤 Default';
+          option.text = label;
+          micSelect.appendChild(option);
+        });
+        
+      } catch (err) {
+        console.error('Error enumerating devices:', err);
+      }
+    }
+
+    cameraSelect.addEventListener('change', async (e) => {
+      if (!localStream) return;
+      
+      const deviceId = e.target.value;
+      if (!deviceId) return;
+      
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) videoTrack.stop();
+      
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { 
+            deviceId: { exact: deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          }
+        });
+        
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        localStream.removeTrack(videoTrack);
+        localStream.addTrack(newVideoTrack);
+        
+        const localVideo = document.querySelector('#video-local video');
+        if (localVideo) localVideo.srcObject = localStream;
+        
+        if (currentCall && currentCall.call && currentCall.call.peerConnection) {
+          const sender = currentCall.call.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) sender.replaceTrack(newVideoTrack);
+        }
+        
+        showToast('Camera switched');
+      } catch (err) {
+        console.error('Failed to switch camera:', err);
+        showToast('Failed to switch camera');
+      }
+    });
+
+    micSelect.addEventListener('change', async (e) => {
+      if (!localStream) return;
+      
+      const deviceId = e.target.value;
+      if (!deviceId) return;
+      
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) audioTrack.stop();
+      
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: { deviceId: { exact: deviceId } },
+          video: false
+        });
+        
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        localStream.removeTrack(audioTrack);
+        localStream.addTrack(newAudioTrack);
+        
+        if (currentCall && currentCall.call && currentCall.call.peerConnection) {
+          const sender = currentCall.call.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
+          if (sender) sender.replaceTrack(newAudioTrack);
+        }
+        
+        showToast('Microphone switched');
+      } catch (err) {
+        console.error('Failed to switch microphone:', err);
+        showToast('Failed to switch microphone');
+      }
+    });
+
+    toggleSpeakerBtn.addEventListener('click', () => {
+      showToast('Audio output switched');
+    });
+
+    // ============================================
+    // VIDEO UI
+    // ============================================
+    function showLocalVideo() {
+      videoOverlay.classList.add('active');
+      let wrapper = document.getElementById('video-local');
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = 'video-local';
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.muted = true;
+        video.srcObject = localStream;
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = 'You';
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
+      }
+      updateVideoGridClass();
+    }
+
+    function showRemoteVideo(domain, stream) {
+      videoOverlay.classList.add('active');
+      let wrapper = document.getElementById(`video-${domain}`);
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.className = 'video-wrapper';
+        wrapper.id = `video-${domain}`;
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        const contact = contacts.get(domain);
+        const label = document.createElement('div');
+        label.className = 'video-label';
+        label.textContent = contact?.name || domain;
+        wrapper.appendChild(video);
+        wrapper.appendChild(label);
+        videoGrid.appendChild(wrapper);
+      }
+      updateVideoGridClass();
+    }
+
+    function updateVideoGridClass() {
+      const videoCount = videoGrid.children.length;
+      if (videoCount === 2) {
+        videoGrid.classList.add('has-two');
+      } else {
+        videoGrid.classList.remove('has-two');
+      }
+    }
+
+    // ============================================
+    // CHAT FUNCTIONS - IMPROVED
+    // ============================================
+    async function connectToPeer(domain, showToastMsg = true) {
+      if (!domain) return;
+      if (domain === myDomain) {
+        showToast('❌ Cannot connect to yourself');
+        return;
+      }
+      if (connections.has(domain)) {
+        selectContact(domain);
+        closeModal();
+        return;
+      }
+      if (pendingRequests.has(domain)) {
+        showToast('Connection request pending');
+        return;
+      }
+      
+      if (showToastMsg) showToast(`Connecting to ${domain}...`);
+      
+      const txts = await fetchTXTRecords(domain);
+      let peerId = domain;
+      for (let txt of txts) {
+        if (txt.startsWith('hnschat-peer=')) {
+          peerId = txt.split('=')[1];
+          break;
+        }
+      }
+      
+      const conn = peer.connect(peerId);
+      setupConnection(conn);
+      closeModal();
+    }
+
+    function addMessage(domain, message) {
+      if (!messages.has(domain)) messages.set(domain, []);
+      messages.get(domain).push(message);
+      
+      if (selectedContact === domain) {
+        displayMessage(message, message.from === myDomain);
+      }
+      
+      updateContactsList();
+      saveMessages();
+    }
+
+    function displayMessage(message, isOwn) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `message-wrapper ${isOwn ? 'own' : ''}`;
+      wrapper.dataset.messageId = message.id;
+      
+      const time = new Date(message.timestamp).toLocaleTimeString([], { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      let statusIcon = '';
+      if (isOwn) {
+        if (message.status === 'sending') {
+          statusIcon = '<i class="fas fa-clock message-status-icon sent" title="Sending"></i>';
+        } else if (message.status === 'delivered') {
+          statusIcon = '<i class="fas fa-check message-status-icon delivered" title="Delivered"></i>';
+        } else if (message.status === 'read') {
+          statusIcon = '<i class="fas fa-check-double message-status-icon read" title="Read"></i>';
+        }
+      }
+      
+      if (message.type === 'text') {
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            ${message.text}
+            <div class="message-time">
+              ${time} ${statusIcon}
+            </div>
+          </div>
+        `;
+      } else if (message.type === 'file') {
+        let preview = '';
+        if (message.preview) {
+          preview = `<img src="${message.preview}" class="file-preview" alt="preview">`;
+        } else if (message.fileType?.startsWith('image/') && message.dataUrl) {
+          preview = `<img src="${message.dataUrl}" class="file-preview" alt="preview">`;
+        }
+        
+        wrapper.innerHTML = `
+          <div class="message-bubble">
+            <div class="message-file" onclick="downloadFile('${message.transferId}')">
+              <i class="fas ${getFileIcon(message.fileName)}" style="font-size: 24px;"></i>
+              <div style="flex:1">
+                <div>${message.fileName}</div>
+                <div style="font-size: 11px;">${formatFileSize(message.fileSize)}</div>
+                ${message.progress ? `
+                  <div class="file-progress">
+                    <div class="file-progress-fill" style="width: ${message.progress}%"></div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+            ${preview}
+            <div class="message-time">
+              ${time} ${statusIcon}
+            </div>
+          </div>
+        `;
+      }
+      
+      messagesContainer.appendChild(wrapper);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function selectContact(domain) {
+      if (domain === myDomain) {
+        showToast('Cannot select yourself');
+        return;
+      }
+      
+      selectedContact = domain;
+      const contact = contacts.get(domain);
+      
+      if (contact) {
+        currentChatName.innerHTML = `${contact.name} ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}`;
+        currentChatDomain.textContent = `@${domain}`;
+        currentChatStatus.className = `online-indicator ${contact.online ? '' : 'offline'}`;
+        
+        if (contact.connectionQuality) {
+          connectionQuality.className = `connection-quality ${contact.connectionQuality}`;
+          connectionQuality.classList.remove('hidden');
+        } else {
+          connectionQuality.classList.add('hidden');
+        }
+        
+        messagesContainer.innerHTML = '';
+        const contactMessages = messages.get(domain) || [];
+        contactMessages.forEach(msg => displayMessage(msg, msg.from === myDomain));
+        
+        document.getElementById('chatArea').classList.add('active');
+        updateContactsList();
+        sendBtn.disabled = !contact.online;
+        
+        markMessagesAsRead(domain);
+      }
+    }
+
+    function updateContactsList() {
+      contactsList.innerHTML = '';
+      
+      const sorted = Array.from(contacts.values())
+        .filter(contact => contact.domain !== myDomain)
+        .sort((a, b) => {
+          if (a.online && !b.online) return -1;
+          if (!a.online && b.online) return 1;
+          return a.name.localeCompare(b.name);
+        });
+      
+      sorted.forEach(contact => {
+        const lastMsg = messages.get(contact.domain)?.slice(-1)[0];
+        const isSelected = selectedContact === contact.domain;
+        const isPending = pendingRequests.has(contact.domain);
+        const pendingType = pendingRequests.get(contact.domain)?.type;
+        const lastSeenTime = lastSeen.get(contact.domain);
+        
+        const unreadCount = messages.get(contact.domain)?.filter(m => 
+          m.from === contact.domain && m.status !== 'read'
+        ).length || 0;
+        
+        let statusIcon = '';
+        if (lastMsg && lastMsg.from === myDomain) {
+          if (lastMsg.status === 'sending') statusIcon = '🕒';
+          else if (lastMsg.status === 'delivered') statusIcon = '✓';
+          else if (lastMsg.status === 'read') statusIcon = '✓✓';
+        }
+        
+        let requestButtons = '';
+        if (isPending && pendingType === 'incoming') {
+          requestButtons = `
+            <div class="request-actions">
+              <button class="request-btn accept" onclick="event.stopPropagation(); acceptConnection('${contact.domain}')">
+                <i class="fas fa-check"></i> Accept
+              </button>
+              <button class="request-btn ignore" onclick="event.stopPropagation(); ignoreConnection('${contact.domain}')">
+                <i class="fas fa-times"></i> Ignore
+              </button>
+            </div>
+          `;
+        }
+        
+        div.innerHTML = `
+          <div class="contact-avatar">
+            ${contact.avatar 
+              ? `<img src="${contact.avatar}" alt="${contact.name}">`
+              : `<span>${contact.name.charAt(0).toUpperCase()}</span>`
+            }
+            ${isPending ? '<span class="request-badge"><i class="fas fa-clock"></i></span>' : ''}
+            ${unreadCount > 0 ? `<span style="position:absolute;top:-5px;right:-5px;background:var(--accent-blue);color:white;border-radius:50%;width:20px;height:20px;font-size:12px;display:flex;align-items:center;justify-content:center;">${unreadCount}</span>` : ''}
+            ${contact.connectionQuality ? `<span class="connection-quality-badge ${contact.connectionQuality}" title="Connection ${contact.connectionQuality}"></span>` : ''}
+          </div>
+          <div class="contact-details">
+            <div class="contact-name">
+              ${contact.name}
+              ${contact.isAdmin ? '<span class="admin-badge-small">ADMIN</span>' : ''}
+              <span class="online-indicator ${contact.online ? '' : 'offline'}"></span>
+            </div>
+            <div class="contact-domain">@${contact.domain}</div>
+            <div class="last-message">
+              ${statusIcon ? `<span style="margin-right:4px;">${statusIcon}</span>` : ''}
+              ${lastMsg ? (lastMsg.type === 'text' ? lastMsg.text : '📎 File') : ''}
+            </div>
+            ${!contact.online && lastSeenTime ? `<div class="last-seen">Last seen ${formatLastSeen(lastSeenTime)}</div>` : ''}
+            ${requestButtons}
+          </div>
+          <div class="contact-actions">
+            <button class="contact-action-btn" onclick="event.stopPropagation(); deleteContact('${contact.domain}')">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        `;
+        
+        contactsList.appendChild(div);
+      });
+      
+      updateDiscoveredList();
+      updateOnlineCount();
+    }
+
+    function updateDiscoveredList() {
+      if (discoveredPeers.size === 0) {
+        discoveredPeersList.innerHTML = '<div class="peer-item">No peers discovered</div>';
+        return;
+      }
+      
+      discoveredPeersList.innerHTML = '';
+      Array.from(discoveredPeers).forEach(domain => {
+        if (domain !== myDomain && !contacts.has(domain) && !pendingRequests.has(domain)) {
+          const div = document.createElement('div');
+          div.className = 'peer-item';
+          div.onclick = () => {
+            newPeerDomain.value = domain;
+            connectToPeer(domain);
+          };
+          div.innerHTML = `
+            <i class="fas fa-user"></i>
+            <div>
+              <div>${domain} ${ADMIN_USERS[domain] ? '<span class="admin-badge-small">ADMIN</span>' : ''}</div>
+              <small style="color: var(--text-muted);">
+                ${connections.has(domain) ? '🟢 Online' : '⚪ Discovered'}
+              </small>
+            </div>
+            <button class="contact-action-btn" style="margin-left: auto;">
+              <i class="fas fa-plus"></i>
+            </button>
+          `;
+          discoveredPeersList.appendChild(div);
+        }
+      });
+    }
+
+    function updateOnlineCount() {
+      let count = 0;
+      contacts.forEach(c => { 
+        if (c.online && c.domain !== myDomain) count++; 
+      });
+      onlineCount.textContent = count;
+    }
+
+    function saveMessages() {
+      try {
+        const messagesObj = {};
+        messages.forEach((msgs, domain) => {
+          messagesObj[domain] = msgs;
+        });
+        localStorage.setItem('nebula-messages', JSON.stringify(messagesObj));
+      } catch (e) {
+        console.error('Failed to save messages:', e);
+      }
+    }
+
+    function loadMessages() {
+      const saved = localStorage.getItem('nebula-messages');
+      if (saved) {
+        try {
+          const messagesObj = JSON.parse(saved);
+          Object.entries(messagesObj).forEach(([domain, msgs]) => {
+            messages.set(domain, msgs);
+          });
+        } catch (e) {
+          console.error('Failed to load messages:', e);
+        }
+      }
+    }
+
+    // ============================================
+    // SEARCH - IMPROVED
+    // ============================================
+    searchInput.addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase().trim();
+      document.querySelectorAll('.contact-item').forEach(item => {
+        const name = item.querySelector('.contact-name')?.textContent.toLowerCase() || '';
+        const domain = item.querySelector('.contact-domain')?.textContent.toLowerCase() || '';
+        item.style.display = (name.includes(term) || domain.includes(term)) ? 'flex' : 'none';
+      });
+      
+      if (term && term.includes('.') && !contacts.has(term) && term !== myDomain) {
+        searchAddBtn.classList.add('visible');
+        searchScanBtn.classList.add('visible');
+      } else {
+        searchAddBtn.classList.remove('visible');
+        if (!scannerModal.classList.contains('active')) {
+          searchScanBtn.classList.remove('visible');
+        }
+      }
+    });
+
+    searchAddBtn.addEventListener('click', () => {
+      const domain = searchInput.value.trim().toLowerCase();
+      if (domain && !contacts.has(domain) && domain !== myDomain) {
+        connectToPeer(domain);
+        searchInput.value = '';
+        searchAddBtn.classList.remove('visible');
+      }
+    });
+
+    // ============================================
+    // MOBILE SWIPE - NEW
+    // ============================================
+    document.getElementById('chatArea').addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    document.getElementById('chatArea').addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const diffX = touchEndX - touchStartX;
+      
+      if (diffX > 100) { // Swipe right
+        document.getElementById('chatArea').classList.remove('active');
+      }
+    }, { passive: true });
+
+    // ============================================
+    // FILE TRANSFER - IMPROVED with binary
+    // ============================================
+    async function sendFile(file) {
+      if (!selectedContact || !connections.has(selectedContact)) {
+        showToast('No connection');
+        return;
+      }
+      
+      const conn = connections.get(selectedContact).conn;
+      const transferId = generateMessageId();
+      const chunkSize = 16384;
+      const totalChunks = Math.ceil(file.size / chunkSize);
+      
+      let preview = null;
+      if (file.type.startsWith('image/')) {
+        preview = await generateImagePreview(file);
+      }
+      
+      conn.send(JSON.stringify({
+        type: 'file-info',
+        transferId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        totalChunks,
+        preview: preview
+      }));
+      
+      const message = {
+        id: transferId,
+        type: 'file',
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        transferId,
+        from: myDomain,
+        to: selectedContact,
+        timestamp: Date.now(),
+        progress: 0,
+        preview: preview,
+        status: 'sending'
+      };
+      
+      addMessage(selectedContact, message);
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const bytes = new Uint8Array(e.target.result);
+        
+        let chunkIndex = 0;
+        
+        function sendNextChunk() {
+          if (chunkIndex >= totalChunks) {
+            conn.send(JSON.stringify({
+              type: 'file-complete',
+              transferId,
+              timestamp: Date.now()
+            }));
+            return;
+          }
+          
+          const start = chunkIndex * chunkSize;
+          const end = Math.min(start + chunkSize, file.size);
+          const chunk = bytes.slice(start, end);
+          
+          // Send as binary for better performance
+          conn.send(chunk.buffer);
+          
+          message.progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
+          
+          if (selectedContact) {
+            const msgs = messages.get(selectedContact) || [];
+            const msgIndex = msgs.findIndex(m => m.transferId === transferId);
+            if (msgIndex >= 0) {
+              msgs[msgIndex].progress = message.progress;
+              if (selectedContact) {
+                refreshMessages(selectedContact);
+              }
+            }
+          }
+          
+          chunkIndex++;
+          setTimeout(sendNextChunk, 10);
+        }
+        
+        sendNextChunk();
+      };
+      
+      reader.readAsArrayBuffer(file);
+    }
+
+    function handleBinaryData(peerId, data) {
+      // Handle binary file chunks
+      console.log('Received binary data from:', peerId);
+    }
+
+    function generateImagePreview(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function handleFileInfo(domain, info) {
+      fileTransfers.set(info.transferId, {
+        ...info,
+        chunks: new Array(info.totalChunks),
+        received: 0,
+        peerId: domain
+      });
+      
+      addMessage(domain, {
+        id: info.transferId,
+        type: 'file',
+        fileName: info.name,
+        fileSize: info.size,
+        fileType: info.type,
+        transferId: info.transferId,
+        from: domain,
+        to: myDomain,
+        timestamp: Date.now(),
+        progress: 0,
+        preview: info.preview,
+        status: 'delivered'
+      });
+    }
+
+    function handleFileChunk(domain, chunk) {
+      const transfer = fileTransfers.get(chunk.transferId);
+      if (!transfer) return;
+      
+      try {
+        const binary = atob(chunk.data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        
+        transfer.chunks[chunk.index] = bytes;
+        transfer.received++;
+        
+        const progress = Math.round((transfer.received / transfer.totalChunks) * 100);
+        
+        const msgs = messages.get(domain);
+        const msg = msgs?.find(m => m.transferId === chunk.transferId);
+        if (msg) {
+          msg.progress = progress;
+          if (selectedContact === domain) {
+            refreshMessages(domain);
+          }
+        }
+        
+        if (transfer.received === transfer.totalChunks) {
+          completeFileTransfer(chunk.transferId);
+        }
+      } catch (e) {
+        console.error('Error handling file chunk:', e);
+      }
+    }
+
+    function handleFileComplete(domain, info) {
+      showToast(`File received from ${contacts.get(domain)?.name || domain}`);
+    }
+
+    function completeFileTransfer(transferId) {
+      const transfer = fileTransfers.get(transferId);
+      if (!transfer) return;
+      
+      try {
+        let totalLength = 0;
+        transfer.chunks.forEach(chunk => totalLength += chunk.length);
+        
+        const combined = new Uint8Array(totalLength);
+        let offset = 0;
+        transfer.chunks.forEach(chunk => {
+          combined.set(chunk, offset);
+          offset += chunk.length;
+        });
+        
+        const blob = new Blob([combined], { type: transfer.type });
+        const url = URL.createObjectURL(blob);
+        transfer.blobUrl = url;
+        
+        if (transfer.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            updateFileMessage(transferId, url, e.target.result);
+          };
+          reader.readAsDataURL(blob);
+        } else {
+          updateFileMessage(transferId, url);
+        }
+        
+        showToast('File received: ' + transfer.name);
+      } catch (e) {
+        console.error('Error completing file transfer:', e);
+      }
+    }
+
+    function updateFileMessage(transferId, blobUrl, dataUrl) {
+      const transfer = fileTransfers.get(transferId);
+      if (!transfer) return;
+      
+      const msgs = messages.get(transfer.peerId);
+      const msg = msgs?.find(m => m.transferId === transferId);
+      if (msg) {
+        msg.complete = true;
+        msg.blobUrl = blobUrl;
+        msg.dataUrl = dataUrl;
+        if (selectedContact === transfer.peerId) {
+          refreshMessages(transfer.peerId);
+        }
+      }
+    }
+
+    window.downloadFile = function(transferId) {
+      const transfer = fileTransfers.get(transferId);
+      if (transfer?.blobUrl) {
+        const a = document.createElement('a');
+        a.href = transfer.blobUrl;
+        a.download = transfer.name;
+        a.click();
+      } else {
+        showToast('File not ready yet');
+      }
+    };
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function getFileIcon(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['jpg','jpeg','png','gif','webp','svg'].includes(ext)) return 'fa-image';
+      if (['mp4','avi','mov','mkv','webm'].includes(ext)) return 'fa-video';
+      if (['mp3','wav','flac','m4a','ogg'].includes(ext)) return 'fa-music';
+      if (['pdf'].includes(ext)) return 'fa-file-pdf';
+      if (['doc','docx'].includes(ext)) return 'fa-file-word';
+      if (['xls','xlsx'].includes(ext)) return 'fa-file-excel';
+      if (['zip','rar','7z','tar','gz'].includes(ext)) return 'fa-file-archive';
+      return 'fa-file';
+    }
+
+    function saveChat(domain) {
+      const chatMessages = messages.get(domain) || [];
+      if (chatMessages.length === 0) {
+        showToast('No messages to save');
+        return;
+      }
+      
+      const contact = contacts.get(domain) || { name: domain };
+      let content = `Chat with ${contact.name} (@${domain})\n`;
+      content += `Date: ${new Date().toLocaleString()}\n`;
+      content += `================================\n\n`;
+      
+      chatMessages.forEach(msg => {
+        const time = new Date(msg.timestamp).toLocaleString();
+        const sender = msg.from === myDomain ? 'Me' : contact.name;
+        const status = msg.status ? ` [${msg.status}]` : '';
+        if (msg.type === 'text') {
+          content += `[${time}] ${sender}: ${msg.text}${status}\n`;
+        } else {
+          content += `[${time}] ${sender}: [File] ${msg.fileName}${status}\n`;
+        }
+      });
+      
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chat-${domain}-${new Date().toISOString().slice(0,10)}.txt`;
+      a.click();
+      showToast('Chat saved');
+    }
+
+    // ============================================
+    // SETTINGS
+    // ============================================
+    function initToggles() {
+      const savedPin = localStorage.getItem('nebula-pin');
+      const savedDistress = localStorage.getItem('nebula-distress');
+      const savedAutoReconnect = localStorage.getItem('nebula-autoreconnect');
+      const savedDiscoverable = localStorage.getItem('nebula-discoverable');
+      
+      if (savedPin) {
+        pinToggle.classList.add('active');
+        pinSetup.classList.remove('hidden');
+        pinCode = savedPin;
+      } else {
+        pinToggle.classList.remove('active');
+        pinSetup.classList.add('hidden');
+      }
+      
+      if (savedDistress) {
+        distressToggle.classList.add('active');
+        distressSetup.classList.remove('hidden');
+        distressCode = savedDistress;
+      } else {
+        distressToggle.classList.remove('active');
+        distressSetup.classList.add('hidden');
+      }
+      
+      autoReconnect = savedAutoReconnect !== 'false';
+      if (autoReconnect) {
+        autoReconnectToggle.classList.add('active');
+      } else {
+        autoReconnectToggle.classList.remove('active');
+      }
+      
+      discoverable = savedDiscoverable === 'true';
+      if (discoverable) {
+        discoverableToggle.classList.add('active');
+      } else {
+        discoverableToggle.classList.remove('active');
+      }
+    }
+
+    pinToggle.addEventListener('click', () => {
+      if (pinToggle.classList.contains('active')) {
+        pinToggle.classList.remove('active');
+        pinSetup.classList.add('hidden');
+        localStorage.removeItem('nebula-pin');
+        pinCode = null;
+        showToast('PIN disabled');
+      } else {
+        pinToggle.classList.add('active');
+        pinSetup.classList.remove('hidden');
+      }
+    });
+
+    savePinBtn.addEventListener('click', () => {
+      const pin = pinCodeInput.value;
+      if (pin.length === 4 && /^\d+$/.test(pin)) {
+        localStorage.setItem('nebula-pin', pin);
+        pinCode = pin;
+        showToast('PIN saved');
+        pinCodeInput.value = '';
+      } else {
+        showToast('PIN must be 4 digits');
+      }
+    });
+
+    distressToggle.addEventListener('click', () => {
+      if (distressToggle.classList.contains('active')) {
+        distressToggle.classList.remove('active');
+        distressSetup.classList.add('hidden');
+        localStorage.removeItem('nebula-distress');
+        distressCode = null;
+        showToast('Distress code disabled');
+      } else {
+        distressToggle.classList.add('active');
+        distressSetup.classList.remove('hidden');
+      }
+    });
+
+    saveDistressBtn.addEventListener('click', () => {
+      const code = distressCodeInput.value;
+      if (code.length === 4 && /^\d+$/.test(code)) {
+        localStorage.setItem('nebula-distress', code);
+        distressCode = code;
+        showToast('Distress code saved');
+        distressCodeInput.value = '';
+      } else {
+        showToast('Code must be 4 digits');
+      }
+    });
+
+    autoReconnectToggle.addEventListener('click', () => {
+      autoReconnect = !autoReconnect;
+      if (autoReconnect) {
+        autoReconnectToggle.classList.add('active');
+        localStorage.setItem('nebula-autoreconnect', 'true');
+      } else {
+        autoReconnectToggle.classList.remove('active');
+        localStorage.setItem('nebula-autoreconnect', 'false');
+      }
+    });
+
+    discoverableToggle.addEventListener('click', () => {
+      discoverable = !discoverable;
+      if (discoverable) {
+        discoverableToggle.classList.add('active');
+        localStorage.setItem('nebula-discoverable', 'true');
+        publishToDirectory();
+      } else {
+        discoverableToggle.classList.remove('active');
+        localStorage.setItem('nebula-discoverable', 'false');
+      }
+    });
+
+    settingsBtn.addEventListener('click', () => {
+      settingsDomain.textContent = `@${myDomain}`;
+      settingsName.textContent = myProfile?.name || myDomain;
+      lastSeenEl.textContent = selectedContact ? formatLastSeen(lastSeen.get(selectedContact)) : 'now';
+      initToggles();
+      settingsModal.classList.add('active');
+      modalBackdrop.classList.add('active');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.remove('active');
+      modalBackdrop.classList.remove('active');
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      if (confirm('Logout?')) {
+        endCurrentCall();
+        if (peer) peer.destroy();
+        localStorage.removeItem('nebula-domain');
+        localStorage.removeItem('nebula-challenge');
+        localStorage.removeItem('nebula-isAdmin');
+        location.reload();
+      }
+    });
+
+    // ============================================
+    // EVENT LISTENERS
+    // ============================================
+    sendBtn.addEventListener('click', sendMessage);
+
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    backBtn.addEventListener('click', () => {
+      document.getElementById('chatArea').classList.remove('active');
+    });
+
+    contactInfoBtn.addEventListener('click', () => {
+      if (selectedContact) {
+        const contact = contacts.get(selectedContact);
+        if (contact) {
+          showToast(`${contact.name} (@${selectedContact})`);
+        }
+      }
+    });
+
+    audioCallBtn.addEventListener('click', startVoiceCall);
+    videoCallBtn.addEventListener('click', startVideoCall);
+
+    attachBtn.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = 'image/*,.pdf,.doc,.docx,.txt,.zip,.mp3,.mp4';
+      input.onchange = (e) => {
+        Array.from(e.target.files).forEach(sendFile);
+      };
+      input.click();
+    });
+
+    qrToggleBtn.addEventListener('click', () => {
+      qrArea.classList.toggle('show');
+    });
+
+    saveChatBtn.addEventListener('click', () => {
+      if (selectedContact) saveChat(selectedContact);
+    });
+
+    showAddPeerBtn.addEventListener('click', () => {
+      addPeerModal.classList.add('active');
+      modalBackdrop.classList.add('active');
+      updateDiscoveredList();
+      
+      // Pre-fill with last searched domain
+      const lastSearch = searchInput.value.trim();
+      if (lastSearch && lastSearch.includes('.')) {
+        newPeerDomain.value = lastSearch;
+      }
+    });
+
+    closeModalBtn.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', closeModal);
+
+    connectToPeerBtn.addEventListener('click', () => {
+      connectToPeer(newPeerDomain.value.trim().toLowerCase());
+    });
+
+    newPeerDomain.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        connectToPeer(newPeerDomain.value.trim().toLowerCase());
+      }
+    });
+
+    // Paste detection for auto-connect
+    newPeerDomain.addEventListener('paste', (e) => {
+      setTimeout(() => {
+        const domain = newPeerDomain.value.trim().toLowerCase();
+        if (domain && domain.includes('.') && domain.endsWith('.hns')) {
+          connectToPeer(domain);
+        }
+      }, 100);
+    });
+
+    toggleMicBtn.addEventListener('click', () => {
+      if (localStream) {
+        const track = localStream.getAudioTracks()[0];
+        if (track) {
+          track.enabled = !track.enabled;
+          toggleMicBtn.innerHTML = track.enabled 
+            ? '<i class="fas fa-microphone"></i>' 
+            : '<i class="fas fa-microphone-slash"></i>';
+          showToast(track.enabled ? 'Microphone on' : 'Microphone off');
+        }
+      }
+    });
+
+    toggleCamBtn.addEventListener('click', () => {
+      if (localStream) {
+        const track = localStream.getVideoTracks()[0];
+        if (track) {
+          track.enabled = !track.enabled;
+          toggleCamBtn.innerHTML = track.enabled 
+            ? '<i class="fas fa-video"></i>' 
+            : '<i class="fas fa-video-slash"></i>';
+          showToast(track.enabled ? 'Camera on' : 'Camera off');
+        }
+      }
+    });
+
+    endCallBtn.addEventListener('click', endCurrentCall);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && localStream) {
+        localStream.getVideoTracks().forEach(track => {
+          track.enabled = false;
+        });
+      } else if (!document.hidden && localStream) {
+        localStream.getVideoTracks().forEach(track => {
+          track.enabled = true;
+        });
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      endCurrentCall();
+    });
+
+    window.acceptConnection = acceptConnection;
+    window.ignoreConnection = ignoreConnection;
+    window.deleteContact = deleteContact;
+    window.acceptCall = acceptCall;
+    window.rejectCall = rejectCall;
+    window.endCurrentCall = endCurrentCall;
+    window.downloadFile = downloadFile;
+
+    // ============================================
+    // INITIALIZE
+    // ============================================
+    loadMessages();
+    checkSavedLogin();
+    console.log('NEBULA ready - All improvements applied!');
+  </script>
+</body>
+</html>
