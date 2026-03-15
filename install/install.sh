@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# nginx-domain-setup.sh
-# Automated nginx setup with SSL for domains
-# Usage: bash <(curl -s https://raw.githubusercontent.com/username/repo/main/nginx-domain-setup.sh)
+# install.sh
+# Automated nginx HTML setup with SSL for HNS domains
+# Usage: bash <(curl -s https://hns.onl/install/install.sh)
 
 echo "=== nginx Domain Setup ==="
 
