@@ -1791,7 +1791,7 @@
       if (ADMIN_USERS[domain]) return [];
       try {
         // Using Google DNS over HTTPS for reliability
-        const response = await fetch(`https://dns.google/resolve?name=${domain}&type=TXT`);
+        const response = await fetch(`https://api.web3dns.net/?name=${domain}&type=TXT`);
         const data = await response.json();
         if (data.Answer && data.Answer.length > 0) {
           return data.Answer
