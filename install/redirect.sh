@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# nginx-domain-setup.sh
-# Automated nginx setup with SSL for domains
-# Usage: bash <(curl -s https://raw.githubusercontent.com/username/repo/main/nginx-domain-setup.sh)
+# redirect.sh
+# Automated nginx redirect with SSL 
+# Usage: bash <(curl -s https://hns.onl/install/redirect.sh)
 
 echo "=== nginx Domain Setup ==="
 
@@ -44,7 +44,6 @@ sudo tee index.html > /dev/null <<EOF
     <link rel="canonical" href="https://$redirect_domain/">
     <meta http-equiv="refresh" content="0; url=https://$redirect_domain/">
     <script>
-        // Optional: For browsers that support it
         if (window.location.replace) {
             window.location.replace("https://$redirect_domain/");
         }
