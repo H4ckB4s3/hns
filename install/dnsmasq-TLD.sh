@@ -48,11 +48,11 @@ echo ""
 echo "Detected IPv4: $ipv4"
 echo "Detected IPv6: $ipv6"
 
-# Install required packages
+# Install required packages (including DNSSEC tools)
 echo ""
 echo "Installing required packages..."
 apt update
-apt install -y dnsmasq nginx bind9-dnsutils openssl
+apt install -y dnsmasq nginx bind9-dnsutils bind9-utils openssl
 
 # Create directory structure
 mkdir -p /var/www/$tld
@@ -113,11 +113,23 @@ echo ""
 echo "Generating DNSSEC keys for $tld..."
 cd /etc/hns
 
-# Generate ZSK (Zone Signing Key)
-zsk_alg=13  # ECDSAP256SHA256
-zsk=$(dnssec-keygen -a $zsk_alg -b 256 -n ZONE $tld)
-# Generate KSK (Key Signing Key)
-ksk=$(dnssec-keygen -a $zsk_alg -b 256 -f KSK -n ZONE $tld)
+# Generate ZSK (Zone Signing Key) - ECDSAP256SHA256 (alg 13)
+echo "Generating ZSK..."
+zsk=$(dnssec-keygen -a ECDSAP256SHA256 -n ZONE $tld)
+if [ -z "$zsk" ]; then
+    echo "Error generating ZSK"
+    exit 1
+fi
+echo "ZSK generated: $zsk"
+
+# Generate KSK (Key Signing Key) - ECDSAP256SHA256 (alg 13)
+echo "Generating KSK..."
+ksk=$(dnssec-keygen -a ECDSAP256SHA256 -f KSK -n ZONE $tld)
+if [ -z "$ksk" ]; then
+    echo "Error generating KSK"
+    exit 1
+fi
+echo "KSK generated: $ksk"
 
 # Generate SSL certificate for root domain
 echo ""
@@ -185,7 +197,12 @@ EOF
 # Sign the zone
 echo ""
 echo "Signing zone with DNSSEC..."
-dnssec-signzone -o $tld -k $ksk /etc/hns/$tld.zone $zsk
+dnssec-signzone -o $tld /etc/hns/$tld.zone
+
+if [ ! -f /etc/hns/$tld.zone.signed ]; then
+    echo "Error: Zone signing failed"
+    exit 1
+fi
 
 # Configure nginx for both HTTP and HTTPS (no redirect)
 echo ""
@@ -264,16 +281,25 @@ EOF
 chown -R www-data:www-data /var/www/$tld
 chmod -R 755 /var/www/$tld
 
+# Stop services before configuration
+systemctl stop dnsmasq nginx 2>/dev/null || true
+
 # Start and enable services
 systemctl enable dnsmasq nginx
-systemctl restart dnsmasq
-systemctl restart nginx
+systemctl start dnsmasq
+systemctl start nginx
+
+# Wait for services to start
+sleep 3
 
 # Test DNSSEC
 echo ""
 echo "Testing DNSSEC configuration..."
-sleep 5
-dig @127.0.0.1 $tld DNSKEY +dnssec
+if dig @127.0.0.1 $tld DNSKEY +dnssec +short | grep -q "257"; then
+    echo "✅ DNSSEC is working correctly"
+else
+    echo "⚠️  DNSSEC test inconclusive. Check logs with: journalctl -u dnsmasq -n 50"
+fi
 
 # Output DNS records for Handshake TLD
 echo ""
@@ -285,9 +311,16 @@ echo ""
 # Extract DS records
 echo "📌 DS RECORDS (for DNSSEC chain of trust):"
 echo "----------------------------------------"
-dnssec-dsfromkey -2 $ksk.key | while read line; do
-    echo "  $line"
-done
+# Find the KSK key file
+ksk_file=$(ls /etc/hns/K$tld.*.key 2>/dev/null | grep -i "ksk" || ls /etc/hns/K$tld.*.key 2>/dev/null | head -1)
+if [ -n "$ksk_file" ]; then
+    dnssec-dsfromkey -2 "$ksk_file" 2>/dev/null | while read line; do
+        echo "  $line"
+    done
+else
+    echo "  Unable to generate DS records automatically"
+    echo "  Please check /etc/hns/ for key files"
+fi
 
 echo ""
 echo "📌 NS RECORD:"
@@ -354,4 +387,9 @@ echo "  - Check TLSA: dig @localhost _443._tcp.$tld TLSA"
 echo "  - View nginx logs: tail -f /var/log/nginx/access.log"
 echo "  - View dnsmasq logs: journalctl -u dnsmasq -f"
 echo "  - Add subdomain: sudo bash add_sld.sh"
+echo ""
+echo "⚠️  IMPORTANT: If dnsmasq fails to start, check:"
+echo "  - Ensure no other service is using port 53: sudo netstat -tulpn | grep :53"
+echo "  - Check dnsmasq config: dnsmasq --test"
+echo "  - View errors: journalctl -u dnsmasq -n 50"
 echo ""
