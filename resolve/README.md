@@ -3,5 +3,5 @@ bash <(curl -s https://hns.onl/resolve/linux.sh)
 ```
 
 ```bash
-bash <(curl -s https://hns.onl/resolve/linux2.sh)
+bash <(curl -s https://hns.onl/resolve/linux_1.sh)
 ```
