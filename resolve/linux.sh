@@ -46,6 +46,7 @@ echo "⚠️ Always include the trailing slash / after the domain if you don't t
 echo ""
 echo "Examples:"
 echo "   → http://hackbase/"
+echo "   → http://webmail"
 echo "   → http://ecosystem.hackbase/"
 echo "   → http://hackbase.dprofile"
 echo ""
