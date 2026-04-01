@@ -17,6 +17,7 @@ fi
 sudo bash -c 'cat > /etc/resolv.conf << "EOF"
 nameserver 82.68.70.162
 nameserver 82.68.70.163
+nameserver 1.1.1.1
 nameserver 8.8.8.8
 options edns0
 EOF'
@@ -38,17 +39,15 @@ echo ""
 echo "You can now visit domains like this:"
 echo ""
 echo "   Bare TLD:      http://tld./"
-echo "                  https://tld./"
 echo ""
 echo "   Second-level:  http://sld.tld/"
-echo "                  https://sld.tld/"
 echo ""
-echo "⚠️  Important: Always include the trailing slash / after the domain!"
+echo "⚠️  Important: Always include the trailing slash / after the domain if you don't type the http://!"
 echo ""
 echo "Examples:"
-echo "   → http://example./"
-echo "   → http://mysite.example./"
-echo "   → https://cool.tld./"
+echo "   → http://hackbases/"
+echo "   → http://ecosystem.hackbase/"
+echo "   → http://hackbase.profile"
 echo ""
 echo "Enjoy browsing with the whole web!"
 echo ""
