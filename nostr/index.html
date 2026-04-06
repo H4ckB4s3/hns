@@ -12,12 +12,12 @@
             --text-primary: #f1f5f9; --text-secondary: #cbd5e1; --text-muted: #94a3b8;
             --border-light: #1e293b; --purple-500: #8b5cf6; --purple-600: #7c3aed;
             --purple-glow: rgba(139, 92, 246, 0.15); --purple-gradient: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
-            --success: #10b981; --danger: #ef4444;
+            --success: #10b981; --danger: #ef4444; --post-hover: rgba(255,255,255,0.03);
         }
         body.light {
             --bg-page: #f7f9fc; --bg-surface: #ffffff; --bg-elevated: #f1f5f9;
             --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #64748b;
-            --border-light: #e2e8f0;
+            --border-light: #e2e8f0; --post-hover: rgba(0,0,0,0.02);
         }
         body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-page); color: var(--text-primary); transition: all 0.2s; }
         .app-container { display: flex; min-height: 100vh; }
@@ -41,8 +41,31 @@
         button:hover { background: var(--purple-600); transform: translateY(-1px); }
         button.secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-light); }
         input, textarea { background: var(--bg-elevated); border: 1px solid var(--border-light); border-radius: 1rem; padding: 0.75rem 1rem; color: var(--text-primary); width: 100%; font-family: inherit; }
-        .post { background: var(--bg-surface); border-radius: 1rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border-light); cursor: pointer; transition: background 0.2s; }
-        .post:hover { background: var(--bg-elevated); }
+        
+        /* Modern social feed post styling (X/BSky/Primal style) */
+        .post {
+            background: var(--bg-surface);
+            border-radius: 1.25rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-light);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .post:hover { background: var(--post-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .post-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .post-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+        .post-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .post-avatar span { font-size: 1.5rem; }
+        .post-author { font-weight: 700; font-size: 1rem; color: var(--text-primary); }
+        .post-handle { font-size: 0.8rem; color: var(--text-muted); margin-left: 0.25rem; }
+        .post-time { font-size: 0.75rem; color: var(--text-muted); margin-left: auto; }
+        .post-content { font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.75rem; word-break: break-word; white-space: pre-wrap; }
+        .post-content a { color: var(--purple-500); text-decoration: none; }
+        .post-content a:hover { text-decoration: underline; }
+        .post-image { margin-top: 0.75rem; max-width: 100%; border-radius: 1rem; max-height: 400px; object-fit: cover; border: 1px solid var(--border-light); width: auto; display: block; }
+        .post-stats { display: flex; gap: 1.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-light); color: var(--text-muted); font-size: 0.75rem; }
+        
         .contact-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-elevated); border-radius: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem; }
         .npub-text { font-size: 0.7rem; color: var(--text-muted); word-break: break-all; font-family: monospace; }
         .stats { display: flex; gap: 1rem; margin: 1rem 0; cursor: pointer; }
@@ -60,7 +83,9 @@
         @media (max-width: 768px) { .sidebar { width: 80px; } .sidebar .logo { font-size: 1.2rem; text-align: center; } .nav-item span { display: none; } .main-content { margin-left: 80px; padding: 1rem; max-width: calc(100% - 80px); } }
         .follow-list-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .follow-list-content { background: var(--bg-surface); border-radius: 1.5rem; padding: 1.5rem; max-width: 400px; width: 90%; max-height: 70vh; overflow-y: auto; }
-        .post-image { margin-top: 0.75rem; max-width: 100%; border-radius: 0.75rem; max-height: 300px; object-fit: cover; border: 1px solid var(--border-light); }
+        .post-link { color: var(--purple-500); text-decoration: none; }
+        .load-more-btn { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-light); width: 100%; padding: 0.875rem; font-weight: 500; border-radius: 2rem; margin-top: 0.5rem; transition: all 0.2s; }
+        .load-more-btn:hover { background: var(--purple-500); color: white; border-color: var(--purple-500); transform: none; }
     </style>
 </head>
 <body>
@@ -242,18 +267,28 @@
     async function fetchUserPosts(hex) {
         if (postsCache.has(hex)) return postsCache.get(hex);
         await fetchUserMetadata(hex);
-        const events = await queryRelays({ authors: [hex], kinds: [1], limit: 50 });
+        const events = await queryRelays({ authors: [hex], kinds: [1], limit: 70 });
         const enriched = events.sort((a,b) => b.created_at - a.created_at).map(ev => {
             const meta = profileCache.get(hex) || { name: hex.slice(0,8), picture: null };
             let imageUrl = null;
+            // extract image from content (common markdown) or tags
+            if (ev.content) {
+                const imgMatch = ev.content.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)(\?[^\s]*)?/i);
+                if (imgMatch) imageUrl = imgMatch[0];
+            }
             if (ev.tags) {
                 const imgTag = ev.tags.find(t => t[0] === 'image' || (t[0] === 'r' && /\.(jpg|jpeg|png|gif|webp)$/i.test(t[1])));
-                if (imgTag) imageUrl = imgTag[1] || imgTag[2];
+                if (imgTag && !imageUrl) imageUrl = imgTag[1] || imgTag[2];
+            }
+            // convert links to clickable
+            let contentWithLinks = ev.content;
+            if (contentWithLinks) {
+                contentWithLinks = contentWithLinks.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="post-link">$1</a>');
             }
             return {
                 id: ev.id,
                 pubkey: hex,
-                content: ev.content,
+                content: contentWithLinks,
                 created_at: ev.created_at * 1000,
                 name: meta.name,
                 picture: meta.picture,
@@ -266,12 +301,12 @@
     
     async function getGlobalFeed() {
         let all = [];
-        // add current user posts
+        // Add current user posts if logged in
         if (currentUser && currentUser.hexPubkey) {
             const myPosts = await fetchUserPosts(currentUser.hexPubkey);
             all.push(...myPosts);
         }
-        // add posts from all saved contacts (by hex)
+        // Add posts from all saved contacts (by hex)
         for (let [hex, contact] of contacts.entries()) {
             if (hex) {
                 const contactPosts = await fetchUserPosts(hex);
@@ -369,7 +404,6 @@
     async function refreshGlobalFeed() {
         const feed = await getGlobalFeed();
         allEvents = feed;
-        // ensure profileCache has entries for display
         for (const ev of allEvents) {
             if (!profileCache.has(ev.pubkey)) {
                 await fetchUserMetadata(ev.pubkey);
@@ -428,7 +462,7 @@
                     return `<span class="wallet-icon" onclick="window.copyToClipboard('${v}')"><img src="${ICON_BASE}${iconMap[k] || 'btc.png'}" alt="${k}">${k.toUpperCase()}</span>`;
                 }).join('')}</div></div>` : ''}
                 <div class="card"><h3>Posts from Nostr</h3>
-                <div id="profilePosts">${userPosts.map(p => `<div class="post"><div><strong>${getDisplayName(p.pubkey)}</strong> <small>${new Date(p.created_at).toLocaleString()}</small></div><div>${p.content}</div>${p.image ? `<img src="${p.image}" class="post-image" onerror="this.style.display='none'">` : ''}</div>`).join('') || '<p>No posts found on relays</p>'}</div></div>
+                <div id="profilePosts">${userPosts.map(p => `<div class="post"><div class="post-header"><div class="post-avatar">${p.picture ? `<img src="${p.picture}">` : '<span>👤</span>'}</div><div><span class="post-author">${getDisplayName(p.pubkey)}</span><span class="post-handle">${p.pubkey.slice(0,8)}</span></div><div class="post-time">${new Date(p.created_at).toLocaleString()}</div></div><div class="post-content">${p.content}</div>${p.image ? `<img src="${p.image}" class="post-image" onerror="this.style.display='none'">` : ''}</div>`).join('') || '<p>No posts found on relays</p>'}</div></div>
             </div>
         `;
         document.getElementById('backBtn')?.addEventListener('click', () => { if(window.lastView) window.lastView(); else renderFeed(); });
@@ -487,23 +521,34 @@
         });
     }
     
+    // Renders modern global feed (accessible even without login)
     async function renderFeed() {
-        if(!currentUser) { renderLoginScreen(); return; }
-        document.getElementById('mainContent').innerHTML = '<div class="loading"><div class="spinner"></div> Loading posts from relays...</div>';
+        document.getElementById('mainContent').innerHTML = '<div class="loading"><div class="spinner"></div> Loading global feed from relays & contacts...</div>';
         await refreshGlobalFeed();
         const displayed = allEvents.slice(0, currentDisplayedPosts);
         document.getElementById('mainContent').innerHTML = `
-            <div class="card"><h3>New Post</h3><textarea id="newPost" rows="2" placeholder="Share to Nostr... (signing coming soon)"></textarea><button id="feedPublish" disabled>Publish (soon)</button><p class="npub-text" style="margin-top:0.5rem;">Posting to relays coming in a future update</p></div>
-            <div id="feedList">${displayed.map(p => `<div class="post" data-pubkey="${p.pubkey}"><div><strong>${getDisplayName(p.pubkey)}</strong> <small>${new Date(p.created_at).toLocaleString()}</small></div><div>${p.content}</div>${p.image ? `<img src="${p.image}" class="post-image" onerror="this.style.display='none'">` : ''}</div>`).join('')}</div>
-            ${allEvents.length > currentDisplayedPosts ? `<button id="loadMoreBtn" class="load-more-btn">Load More (${allEvents.length - currentDisplayedPosts})</button>` : ''}
+            <div class="card"><h3>🌍 Global Feed</h3><p class="npub-text" style="margin-top:0.5rem;">Posts from your saved contacts + your own posts (if logged in).</p></div>
+            <div id="feedList">${displayed.map(p => `
+                <div class="post" data-pubkey="${p.pubkey}">
+                    <div class="post-header">
+                        <div class="post-avatar">${p.picture ? `<img src="${p.picture}" onerror="this.src=''">` : '<span>👤</span>'}</div>
+                        <div><span class="post-author">${getDisplayName(p.pubkey)}</span><span class="post-handle">${p.pubkey.slice(0,8)}</span></div>
+                        <div class="post-time">${new Date(p.created_at).toLocaleString()}</div>
+                    </div>
+                    <div class="post-content">${p.content}</div>
+                    ${p.image ? `<img src="${p.image}" class="post-image" onerror="this.style.display='none'">` : ''}
+                    <div class="post-stats"><span>💬 Reply</span><span>❤️ Like</span><span>🔁 Repost</span></div>
+                </div>
+            `).join('')}</div>
+            ${allEvents.length > currentDisplayedPosts ? `<button id="loadMoreBtn" class="load-more-btn">Load more posts (${allEvents.length - currentDisplayedPosts} remaining)</button>` : ''}
         `;
         document.querySelectorAll('.post').forEach(post => {
-            post.addEventListener('click', (e) => { if(!e.target.closest('button')) renderUserProfile(post.dataset.pubkey); });
+            post.addEventListener('click', (e) => { if(!e.target.closest('a')) renderUserProfile(post.dataset.pubkey); });
         });
         document.getElementById('loadMoreBtn')?.addEventListener('click', () => { currentDisplayedPosts += 13; renderFeed(); });
     }
     
-    async function renderMyProfile() {
+    async function renderMyProfile() { /* identical to original but kept unchanged */
         if(!currentUser) { renderLoginScreen(); return; }
         const linkedDomain = localStorage.getItem(`hns_link_${currentUser.hexPubkey}`);
         let dnsProfile = null;
@@ -549,7 +594,7 @@
         document.getElementById('myFollowingStat')?.addEventListener('click', () => showFollowList('Following', follows));
     }
     
-    async function renderSearch() { /* identical to original */ 
+    async function renderSearch() { /* identical to original but kept unchanged */
         document.getElementById('mainContent').innerHTML = `
             <div class="card"><h2>Discover by DNS or npub</h2>
             <div style="display:flex; gap:0.5rem;"><input id="searchInput" placeholder="domain.com or npub1..." style="flex:1"><button id="searchBtn">Search</button></div>
@@ -616,7 +661,7 @@
         } else { sessionStorage.clear(); currentUser = null; renderLoginScreen(); }
     }
     
-    const views = { landing: () => currentUser ? renderFeed() : renderLoginScreen(), feed: renderFeed, search: renderSearch, contacts: renderContacts, profile: renderMyProfile, settings: renderSettings };
+    const views = { landing: () => currentUser ? renderFeed() : renderFeed(), feed: renderFeed, search: renderSearch, contacts: renderContacts, profile: renderMyProfile, settings: renderSettings };
     document.querySelectorAll('.nav-item[data-view]').forEach(el => {
         el.addEventListener('click', () => {
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -629,8 +674,8 @@
     
     loadStorage();
     initRelays();
-    if(currentUser) { refreshGlobalFeed().then(() => renderFeed()); }
-    else renderLoginScreen();
+    // Global feed is accessible without login
+    renderFeed();
 </script>
 </body>
 </html>
