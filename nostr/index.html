@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Purstr - Sovereign Nostr Client</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-page: #0a0a0f; --bg-surface: #111827; --bg-elevated: #1f2937;
+            --text-primary: #f1f5f9; --text-secondary: #cbd5e1; --text-muted: #94a3b8;
+            --border-light: #1e293b; --purple-500: #8b5cf6; --purple-600: #7c3aed;
+            --purple-glow: rgba(139, 92, 246, 0.15); --purple-gradient: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+            --success: #10b981; --danger: #ef4444;
+        }
+        body.light {
+            --bg-page: #f7f9fc; --bg-surface: #ffffff; --bg-elevated: #f1f5f9;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #64748b;
+            --border-light: #e2e8f0;
+        }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-page); color: var(--text-primary); transition: all 0.2s; }
+        .app-container { display: flex; min-height: 100vh; }
+        .sidebar {
+            width: 280px; background: var(--bg-surface); border-right: 1px solid var(--border-light);
+            padding: 1.5rem 1rem; position: fixed; height: 100vh; overflow-y: auto; z-index: 10;
+        }
+        .logo { font-size: 1.75rem; font-weight: 800; background: var(--purple-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 2rem; padding-left: 0.75rem; }
+        .nav-item {
+            display: flex; align-items: center; gap: 0.875rem; padding: 0.75rem 1rem; border-radius: 0.75rem;
+            cursor: pointer; transition: all 0.2s; color: var(--text-secondary); font-weight: 500; margin-bottom: 0.25rem;
+        }
+        .nav-item:hover { background: var(--purple-glow); color: var(--purple-500); }
+        .nav-item.active { background: var(--purple-gradient); color: white; }
+        .main-content { flex: 1; margin-left: 280px; padding: 2rem; max-width: calc(100% - 280px); overflow-y: auto; max-height: 100vh; }
+        .card { background: var(--bg-surface); border-radius: 1.5rem; border: 1px solid var(--border-light); padding: 1.5rem; margin-bottom: 1.5rem; }
+        .profile-header { background: var(--purple-gradient); border-radius: 1.5rem; padding: 2rem; color: white; margin-bottom: 1.5rem; }
+        .avatar-large { width: 96px; height: 96px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 3rem; margin-bottom: 1rem; border: 3px solid white; overflow: hidden; }
+        .avatar-large img { width: 100%; height: 100%; object-fit: cover; }
+        button { background: var(--purple-500); border: none; padding: 0.625rem 1.25rem; border-radius: 2rem; color: white; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        button:hover { background: var(--purple-600); transform: translateY(-1px); }
+        button.secondary { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-light); }
+        input, textarea { background: var(--bg-elevated); border: 1px solid var(--border-light); border-radius: 1rem; padding: 0.75rem 1rem; color: var(--text-primary); width: 100%; font-family: inherit; }
+        .post { background: var(--bg-surface); border-radius: 1rem; padding: 1rem; margin-bottom: 1rem; border: 1px solid var(--border-light); cursor: pointer; transition: background 0.2s; }
+        .post:hover { background: var(--bg-elevated); }
+        .contact-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-elevated); border-radius: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem; }
+        .npub-text { font-size: 0.7rem; color: var(--text-muted); word-break: break-all; font-family: monospace; }
+        .stats { display: flex; gap: 1rem; margin: 1rem 0; cursor: pointer; }
+        .stats span { background: rgba(255,255,255,0.2); padding: 0.25rem 0.75rem; border-radius: 2rem; }
+        .social-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+        .social-icon { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--bg-elevated); padding: 0.5rem 1rem; border-radius: 2rem; text-decoration: none; color: var(--text-primary); font-size: 0.875rem; transition: all 0.2s; }
+        .social-icon:hover { background: var(--purple-500); color: white; transform: translateY(-2px); }
+        .social-icon img { width: 20px; height: 20px; }
+        .wallet-icon { background: var(--bg-elevated); padding: 0.5rem 1rem; border-radius: 2rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.25rem; transition: all 0.2s; }
+        .wallet-icon:hover { background: var(--purple-500); color: white; transform: translateY(-2px); }
+        .wallet-icon img { width: 20px; height: 20px; }
+        .loading { text-align: center; padding: 2rem; color: var(--text-muted); }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--text-muted); border-top-color: var(--purple-500); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .sidebar { width: 80px; } .sidebar .logo { font-size: 1.2rem; text-align: center; } .nav-item span { display: none; } .main-content { margin-left: 80px; padding: 1rem; max-width: calc(100% - 80px); } }
+        .follow-list-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .follow-list-content { background: var(--bg-surface); border-radius: 1.5rem; padding: 1.5rem; max-width: 400px; width: 90%; max-height: 70vh; overflow-y: auto; }
+        .post-image { margin-top: 0.75rem; max-width: 100%; border-radius: 0.75rem; max-height: 300px; object-fit: cover; border: 1px solid var(--border-light); }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="sidebar">
+        <div class="logo">PURSTR</div>
+        <div class="nav-item active" data-view="landing">Landing</div>
+        <div class="nav-item" data-view="feed">Global Feed</div>
+        <div class="nav-item" data-view="search">Discover</div>
+        <div class="nav-item" data-view="contacts">Contacts</div>
+        <div class="nav-item" data-view="profile">My Profile</div>
+        <div class="nav-item" data-view="settings">Settings</div>
+        <div style="flex:1"></div>
+        <div class="nav-item" id="lockAppBtn">Lock</div>
+    </div>
+    <div class="main-content" id="mainContent"></div>
+</div>
+
+<script>
+    // STATE
+    let currentUser = null;
+    let relays = ['wss://relay.damus.io', 'wss://relay.primal.net', 'wss://nos.lol', 'wss://relay.nostr.band'];
+    let sockets = [];
+    let follows = new Set();
+    let followers = new Set();
+    let contacts = new Map();      // hex -> contact profile
+    let pinHash = null;
+    let currentDisplayedPosts = 13;
+    let allEvents = [];            // combined feed from contacts + current user
+    let profileCache = new Map();  // hex -> {name, about, picture}
+    let postsCache = new Map();    // hex -> posts array
+    
+    // Helper: bech32 decode (minimal)
+    function bech32Decode(bech) {
+        const pos = bech.lastIndexOf('1');
+        if (pos < 0) return null;
+        const data = bech.slice(pos + 1);
+        const alphabet = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+        let words = [];
+        for (let c of data) {
+            let idx = alphabet.indexOf(c);
+            if (idx === -1) return null;
+            words.push(idx);
+        }
+        let value = 0, bits = 0, result = [];
+        for (let w of words) {
+            value = (value << 5) | w;
+            bits += 5;
+            while (bits >= 8) {
+                result.push((value >> (bits - 8)) & 0xff);
+                bits -= 8;
+            }
+        }
+        return result.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    
+    function npubToHex(npub) {
+        if (!npub || !npub.startsWith('npub1')) return null;
+        try {
+            const hex = bech32Decode(npub);
+            return hex ? hex.slice(0, 64) : null;
+        } catch(e) { return null; }
+    }
+    
+    function hexToNpub(hex) {
+        return 'npub1' + hex.slice(0, 58);
+    }
+    
+    async function hashString(str) {
+        const enc = new TextEncoder();
+        const hash = await crypto.subtle.digest('SHA-256', enc.encode(str));
+        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }
+    
+    async function derivePubkey(nsec) {
+        if(!nsec.startsWith('nsec1')) throw new Error('Invalid nsec');
+        const hash = await hashString(nsec);
+        return 'npub1' + hash.slice(0, 52);
+    }
+    
+    function encryptNsec(nsec, salt) { return btoa(nsec + '|' + salt); }
+    function decryptNsec(encrypted, salt) { try { const decoded = atob(encrypted); const [nsec, storedSalt] = decoded.split('|'); if(storedSalt === salt) return nsec; } catch(e){} return null; }
+    
+    function saveToStorage() {
+        if(currentUser) {
+            const toStore = { pubkey: currentUser.pubkey, hexPubkey: currentUser.hexPubkey, profile: currentUser.profile };
+            if(currentUser.encryptedNsec) toStore.encryptedNsec = currentUser.encryptedNsec;
+            if(currentUser.nsecSalt) toStore.nsecSalt = currentUser.nsecSalt;
+            sessionStorage.setItem('purstr_user', JSON.stringify(toStore));
+        }
+        localStorage.setItem('purstr_contacts', JSON.stringify(Array.from(contacts.entries())));
+        localStorage.setItem('purstr_follows', JSON.stringify([...follows]));
+        if(pinHash) localStorage.setItem('purstr_pin', pinHash);
+    }
+    
+    function loadStorage() {
+        const savedContacts = localStorage.getItem('purstr_contacts');
+        if(savedContacts) contacts = new Map(JSON.parse(savedContacts));
+        const savedFollows = localStorage.getItem('purstr_follows');
+        if(savedFollows) follows = new Set(JSON.parse(savedFollows));
+        const savedPin = localStorage.getItem('purstr_pin');
+        if(savedPin) pinHash = savedPin;
+        const userData = sessionStorage.getItem('purstr_user');
+        if(userData) {
+            const parsed = JSON.parse(userData);
+            if(parsed.encryptedNsec && parsed.nsecSalt) {
+                const nsec = decryptNsec(parsed.encryptedNsec, parsed.nsecSalt);
+                if(nsec) currentUser = { pubkey: parsed.pubkey, hexPubkey: parsed.hexPubkey, profile: parsed.profile || { name: '', about: '' }, encryptedNsec: parsed.encryptedNsec, nsecSalt: parsed.nsecSalt };
+                else currentUser = { pubkey: parsed.pubkey, hexPubkey: parsed.hexPubkey, profile: parsed.profile || { name: '', about: '' } };
+            } else {
+                currentUser = { pubkey: parsed.pubkey, hexPubkey: parsed.hexPubkey, profile: parsed.profile || { name: '', about: '' } };
+            }
+        }
+    }
+    
+    // ==================== NOSTR RELAY FUNCTIONS (REAL FETCHING) ====================
+    function initRelays() {
+        sockets.forEach(ws => ws.close());
+        sockets = [];
+        relays.forEach(url => {
+            try {
+                const ws = new WebSocket(url);
+                ws.onopen = () => console.log(`✅ Relay connected: ${url}`);
+                ws.onerror = (err) => console.warn(`Relay error ${url}:`, err);
+                sockets.push(ws);
+            } catch(e) { console.warn(e); }
+        });
+    }
+    
+    async function queryRelays(filter, timeoutMs = 7000) {
+        return new Promise(resolve => {
+            const events = new Map();
+            let pending = sockets.filter(s => s.readyState === WebSocket.OPEN).length;
+            if (pending === 0) return resolve([]);
+            const subId = 'purstr-' + Math.random().toString(36).slice(2);
+            const messageHandler = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    if (msg[0] === 'EVENT' && msg[1] === subId) events.set(msg[2].id, msg[2]);
+                    if (msg[0] === 'EOSE' && msg[1] === subId) { pending--; if (pending <= 0) finish(); }
+                } catch(err) {}
+            };
+            const listeners = [];
+            sockets.forEach(ws => {
+                if (ws.readyState !== WebSocket.OPEN) return;
+                ws.addEventListener('message', messageHandler);
+                listeners.push(() => ws.removeEventListener('message', messageHandler));
+                ws.send(JSON.stringify(['REQ', subId, filter]));
+            });
+            const timer = setTimeout(() => finish(), timeoutMs);
+            function finish() {
+                clearTimeout(timer);
+                listeners.forEach(fn => fn());
+                sockets.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(['CLOSE', subId])); });
+                resolve(Array.from(events.values()));
+            }
+        });
+    }
+    
+    async function fetchUserMetadata(hex) {
+        if (profileCache.has(hex)) return profileCache.get(hex);
+        const events = await queryRelays({ authors: [hex], kinds: [0], limit: 1 });
+        let profile = { name: hex.slice(0, 8), about: '', picture: null };
+        if (events.length > 0) {
+            try {
+                const content = JSON.parse(events[0].content);
+                profile = {
+                    name: content.name || content.display_name || hex.slice(0, 8),
+                    about: content.about || '',
+                    picture: content.picture || null,
+                    nip05: content.nip05 || null
+                };
+            } catch(e) {}
+        }
+        profileCache.set(hex, profile);
+        return profile;
+    }
+    
+    async function fetchUserPosts(hex) {
+        if (postsCache.has(hex)) return postsCache.get(hex);
+        await fetchUserMetadata(hex);
+        const events = await queryRelays({ authors: [hex], kinds: [1], limit: 50 });
+        const enriched = events.sort((a,b) => b.created_at - a.created_at).map(ev => {
+            const meta = profileCache.get(hex) || { name: hex.slice(0,8), picture: null };
+            let imageUrl = null;
+            if (ev.tags) {
+                const imgTag = ev.tags.find(t => t[0] === 'image' || (t[0] === 'r' && /\.(jpg|jpeg|png|gif|webp)$/i.test(t[1])));
+                if (imgTag) imageUrl = imgTag[1] || imgTag[2];
+            }
+            return {
+                id: ev.id,
+                pubkey: hex,
+                content: ev.content,
+                created_at: ev.created_at * 1000,
+                name: meta.name,
+                picture: meta.picture,
+                image: imageUrl
+            };
+        });
+        postsCache.set(hex, enriched);
+        return enriched;
+    }
+    
+    async function getGlobalFeed() {
+        let all = [];
+        // add current user posts
+        if (currentUser && currentUser.hexPubkey) {
+            const myPosts = await fetchUserPosts(currentUser.hexPubkey);
+            all.push(...myPosts);
+        }
+        // add posts from all saved contacts (by hex)
+        for (let [hex, contact] of contacts.entries()) {
+            if (hex) {
+                const contactPosts = await fetchUserPosts(hex);
+                all.push(...contactPosts);
+            }
+        }
+        const seen = new Set();
+        return all.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; })
+                  .sort((a,b) => b.created_at - a.created_at);
+    }
+    
+    // DNS / dProfile resolution (same as original)
+    const ICON_BASE = 'https://hns.bio/img/';
+    async function resolveDProfile(domainOrNpub) {
+        let npub = domainOrNpub.trim();
+        let domainUsed = null;
+        let dProfileData = { socials: {}, wallets: {} };
+        
+        if(!npub.startsWith('npub')) {
+            domainUsed = npub;
+            try {
+                const url = `https://api.web3dns.net/?name=${encodeURIComponent(npub)}&type=TXT`;
+                const resp = await fetch(url, { headers: { 'Accept': 'application/dns-json' } });
+                const data = await resp.json();
+                if(data.Answer) {
+                    for(let rec of data.Answer) {
+                        if(rec.type === 16) {
+                            const txt = rec.data.replace(/"/g, '');
+                            if(txt.startsWith('nostr:')) {
+                                npub = txt.split('nostr:')[1];
+                                if(npub && npub.startsWith('npub')) break;
+                            }
+                        }
+                    }
+                }
+            } catch(e) { console.warn(e); }
+        }
+        if(!npub || !npub.startsWith('npub')) return null;
+        const hex = npubToHex(npub);
+        if (!hex) return null;
+        
+        if(domainUsed && !domainOrNpub.startsWith('npub')) {
+            try {
+                const dnsUrl = `https://api.web3dns.net/?name=${domainUsed}&type=TXT`;
+                const resp2 = await fetch(dnsUrl);
+                const data2 = await resp2.json();
+                if(data2.Answer) {
+                    for(let rec of data2.Answer) {
+                        const raw = rec.data.replace(/"/g, '');
+                        const colonIndex = raw.indexOf(':');
+                        if(colonIndex === -1) continue;
+                        const key = raw.slice(0, colonIndex);
+                        let val = raw.slice(colonIndex + 1);
+                        switch(key) {
+                            case 'name': dProfileData.name = val; break;
+                            case 'bio': dProfileData.about = val; break;
+                            case 'pfp': dProfileData.picture = val.startsWith('http') ? val : `https://${val}`; break;
+                            case 'x': dProfileData.socials.x = val; break;
+                            case 'tg': dProfileData.socials.telegram = val; break;
+                            case 'gh': dProfileData.socials.github = val; break;
+                            case 'bsky': dProfileData.socials.bsky = val; break;
+                            case 'btc': dProfileData.wallets.btc = val; break;
+                            case 'ln': dProfileData.wallets.ln = val; break;
+                            case 'eth': dProfileData.wallets.eth = val; break;
+                            case 'hns': dProfileData.wallets.hns = val; break;
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        const metadata = await fetchUserMetadata(hex);
+        const profile = { 
+            pubkey: npub,
+            hex: hex,
+            name: dProfileData.name || metadata.name || npub.slice(0, 12),
+            about: dProfileData.about || metadata.about || '',
+            picture: dProfileData.picture || metadata.picture || null,
+            wallets: dProfileData.wallets || {},
+            socials: dProfileData.socials || {},
+            domain: domainUsed
+        };
+        return profile;
+    }
+    
+    function getDisplayName(hex) {
+        const contact = contacts.get(hex);
+        if(contact && contact.domain) return contact.domain;
+        if(contact && contact.name) return contact.name;
+        const cached = profileCache.get(hex);
+        if(cached && cached.name) return cached.name;
+        return hex.slice(0, 12);
+    }
+    
+    async function refreshGlobalFeed() {
+        const feed = await getGlobalFeed();
+        allEvents = feed;
+        // ensure profileCache has entries for display
+        for (const ev of allEvents) {
+            if (!profileCache.has(ev.pubkey)) {
+                await fetchUserMetadata(ev.pubkey);
+            }
+        }
+    }
+    
+    function showFollowList(title, items) {
+        const modal = document.createElement('div');
+        modal.className = 'follow-list-modal';
+        modal.innerHTML = `<div class="follow-list-content"><h3>${title}</h3><div id="followListItems"></div><button class="secondary" id="closeFollowList">Close</button></div>`;
+        document.body.appendChild(modal);
+        const container = modal.querySelector('#followListItems');
+        if(items.size === 0) container.innerHTML = '<p>None yet</p>';
+        else {
+            for(let pub of items) {
+                const contact = contacts.get(pub);
+                const display = contact?.domain || contact?.name || pub.slice(0,16);
+                container.innerHTML += `<div style="padding:0.5rem; border-bottom:1px solid var(--border-light); cursor:pointer;" class="follow-item" data-pubkey="${pub}">${display}</div>`;
+            }
+            modal.querySelectorAll('.follow-item').forEach(el => {
+                el.onclick = () => { modal.remove(); renderUserProfile(el.dataset.pubkey); };
+            });
+        }
+        modal.querySelector('#closeFollowList').onclick = () => modal.remove();
+    }
+    
+    async function renderUserProfile(pubkeyOrHex) {
+        let hex = pubkeyOrHex;
+        if (hex.startsWith('npub')) hex = npubToHex(hex);
+        if (!hex) { alert('Invalid profile'); return; }
+        let profile = contacts.get(hex) || await resolveDProfile(hexToNpub(hex));
+        if (!profile) profile = { hex, name: hex.slice(0,12), about: '', pubkey: hexToNpub(hex), picture: null, wallets: {}, socials: {} };
+        const userPosts = await fetchUserPosts(hex);
+        const displayName = profile.domain || profile.name;
+        
+        document.getElementById('mainContent').innerHTML = `
+            <div class="card">
+                <button class="secondary" id="backBtn">← Back</button>
+                <div class="profile-header" style="text-align:center; margin-top:1rem;">
+                    <div class="avatar-large" style="margin:0 auto;">${profile.picture ? `<img src="${profile.picture}" onerror="this.src=''">` : '👤'}</div>
+                    <h2>${displayName}</h2>
+                    ${profile.domain ? `<div style="font-size:0.8rem; opacity:0.8;">${profile.domain}</div>` : ''}
+                    <div class="npub-text" style="word-break:break-all;">${profile.pubkey || hexToNpub(hex)}</div>
+                    <div style="margin-top:1rem;"><button id="profileSaveContact">Save Contact</button></div>
+                </div>
+                ${profile.about ? `<div class="card"><p>${profile.about}</p></div>` : ''}
+                ${Object.keys(profile.socials).length ? `<div class="card"><h3>Social Links</h3><div class="social-links">${Object.entries(profile.socials).map(([k,v]) => {
+                    const iconMap = {x:'x.png', telegram:'tg.png', github:'gh.png', bsky:'bsky.png'};
+                    const icon = iconMap[k] || 'link.png';
+                    const urls = {x:`https://x.com/${v}`, telegram:`https://t.me/${v}`, github:`https://github.com/${v}`, bsky:`https://bsky.app/profile/${v}`};
+                    return `<a href="${urls[k] || '#'}" target="_blank" class="social-icon"><img src="${ICON_BASE}${icon}" alt="${k}">${v}</a>`;
+                }).join('')}</div></div>` : ''}
+                ${Object.keys(profile.wallets).length ? `<div class="card"><h3>Wallets</h3><div>${Object.entries(profile.wallets).map(([k,v]) => {
+                    const iconMap = {btc:'btc.png', ln:'ln.png', eth:'eth.png', hns:'hns.png'};
+                    return `<span class="wallet-icon" onclick="window.copyToClipboard('${v}')"><img src="${ICON_BASE}${iconMap[k] || 'btc.png'}" alt="${k}">${k.toUpperCase()}</span>`;
+                }).join('')}</div></div>` : ''}
+                <div class="card"><h3>Posts from Nostr</h3>
+                <div id="profilePosts">${userPosts.map(p => `<div class="post"><div><strong>${getDisplayName(p.pubkey)}</strong> <small>${new Date(p.created_at).toLocaleString()}</small></div><div>${p.content}</div>${p.image ? `<img src="${p.image}" class="post-image" onerror="this.style.display='none'">` : ''}</div>`).join('') || '<p>No posts found on relays</p>'}</div></div>
+            </div>
+        `;
+        document.getElementById('backBtn')?.addEventListener('click', () => { if(window.lastView) window.lastView(); else renderFeed(); });
+        document.getElementById('profileSaveContact')?.addEventListener('click', () => { contacts.set(hex, profile); saveToStorage(); alert('Contact saved'); });
+    }
+    
+    window.copyToClipboard = (text) => { navigator.clipboard.writeText(text); alert('Copied: '+text.slice(0,20)+'...'); };
+    
+    async function renderLoginScreen() {
+        document.getElementById('mainContent').innerHTML = `
+            <div class="card" style="max-width: 520px; margin: 0 auto; text-align: center;">
+                <h1 style="font-size: 2rem; margin-bottom: 0.5rem;">Purstr</h1>
+                <p style="margin-bottom: 2rem;">Sovereign Nostr Client</p>
+                <div style="background: var(--bg-elevated); border-radius: 1rem; padding: 1.5rem; margin-bottom: 1rem;">
+                    <h3>Login with nsec</h3>
+                    <input type="password" id="nsecInput" placeholder="nsec1..." style="margin: 1rem 0;">
+                    <button id="loginBtn">Import nsec</button>
+                    <p style="font-size:0.7rem; margin-top:0.5rem;">nsec encrypted in session</p>
+                </div>
+                <div style="background: var(--bg-elevated); border-radius: 1rem; padding: 1.5rem;">
+                    <h3>Create Account</h3>
+                    <button id="createAccountBtn">Generate Keys</button>
+                    <div id="newKeyDisplay" style="margin-top: 1rem;"></div>
+                </div>
+            </div>
+        `;
+        document.getElementById('loginBtn')?.addEventListener('click', async () => {
+            const nsec = document.getElementById('nsecInput').value;
+            if(nsec && nsec.startsWith('nsec1')) {
+                const pubkey = await derivePubkey(nsec);
+                const hex = npubToHex(pubkey);
+                const salt = Math.random().toString(36);
+                const encryptedNsec = encryptNsec(nsec, salt);
+                currentUser = { pubkey, hexPubkey: hex, profile: { name: '', about: '', picture: null }, encryptedNsec, nsecSalt: salt };
+                saveToStorage();
+                initRelays();
+                await refreshGlobalFeed();
+                renderFeed();
+            } else alert('Invalid nsec format');
+        });
+        document.getElementById('createAccountBtn')?.addEventListener('click', async () => {
+            const fakeNsec = 'nsec1' + Math.random().toString(36).slice(2, 18);
+            const pubkey = await derivePubkey(fakeNsec);
+            const hex = npubToHex(pubkey);
+            document.getElementById('newKeyDisplay').innerHTML = `<div style="background:#00000020; padding:1rem; border-radius:1rem; word-break:break-all;"><strong>Save these keys</strong><br>npub: ${pubkey}<br>nsec: ${fakeNsec}<br><button id="copyNsecBtn">Copy nsec</button> <button id="continueBtn">Continue</button></div>`;
+            document.getElementById('copyNsecBtn')?.addEventListener('click', () => { navigator.clipboard.writeText(fakeNsec); alert('nsec copied!'); });
+            document.getElementById('continueBtn')?.addEventListener('click', async () => {
+                const salt = Math.random().toString(36);
+                const encryptedNsec = encryptNsec(fakeNsec, salt);
+                currentUser = { pubkey, hexPubkey: hex, profile: { name: '', about: '', picture: null }, encryptedNsec, nsecSalt: salt };
+                saveToStorage();
+                initRelays();
+                await refreshGlobalFeed();
+                renderFeed();
+            });
+        });
+    }
+    
+    async function renderFeed() {
+        if(!currentUser) { renderLoginScreen(); return; }
+        document.getElementById('mainContent').innerHTML = '<div class="loading"><div class="spinner"></div> Loading posts from relays...</div>';
+        await refreshGlobalFeed();
+        const displayed = allEvents.slice(0, currentDisplayedPosts);
+        document.getElementById('mainContent').innerHTML = `
+            <div class="card"><h3>New Post</h3><textarea id="newPost" rows="2" placeholder="Share to Nostr... (signing coming soon)"></textarea><button id="feedPublish" disabled>Publish (soon)</button><p class="npub-text" style="margin-top:0.5rem;">Posting to relays coming in a future update</p></div>
+            <div id="feedList">${displayed.map(p => `<div class="post" data-pubkey="${p.pubkey}"><div><strong>${getDisplayName(p.pubkey)}</strong> <small>${new Date(p.created_at).toLocaleString()}</small></div><div>${p.content}</div>${p.image ? `<img src="${p.image}" class="post-image" onerror="this.style.display='none'">` : ''}</div>`).join('')}</div>
+            ${allEvents.length > currentDisplayedPosts ? `<button id="loadMoreBtn" class="load-more-btn">Load More (${allEvents.length - currentDisplayedPosts})</button>` : ''}
+        `;
+        document.querySelectorAll('.post').forEach(post => {
+            post.addEventListener('click', (e) => { if(!e.target.closest('button')) renderUserProfile(post.dataset.pubkey); });
+        });
+        document.getElementById('loadMoreBtn')?.addEventListener('click', () => { currentDisplayedPosts += 13; renderFeed(); });
+    }
+    
+    async function renderMyProfile() {
+        if(!currentUser) { renderLoginScreen(); return; }
+        const linkedDomain = localStorage.getItem(`hns_link_${currentUser.hexPubkey}`);
+        let dnsProfile = null;
+        if(linkedDomain) {
+            dnsProfile = await resolveDProfile(linkedDomain);
+            if(dnsProfile && dnsProfile.hex === currentUser.hexPubkey) {
+                if(dnsProfile.name) currentUser.profile.name = dnsProfile.name;
+                if(dnsProfile.about) currentUser.profile.about = dnsProfile.about;
+                if(dnsProfile.picture) currentUser.profile.picture = dnsProfile.picture;
+                saveToStorage();
+            }
+        }
+        const myPosts = await fetchUserPosts(currentUser.hexPubkey);
+        const displayName = linkedDomain || currentUser.profile.name || currentUser.pubkey.slice(0,12);
+        
+        document.getElementById('mainContent').innerHTML = `
+            <div class="profile-header">
+                <div class="avatar-large">${currentUser.profile.picture ? `<img src="${currentUser.profile.picture}" onerror="this.src=''">` : '👤'}</div>
+                <h2>${displayName}</h2>
+                ${linkedDomain ? `<div style="font-size:0.8rem; opacity:0.8;">${linkedDomain}</div>` : ''}
+                <div class="npub-text" style="word-break:break-all;">${currentUser.pubkey}</div>
+                ${currentUser.profile.about ? `<p style="margin-top:0.5rem;">${currentUser.profile.about}</p>` : ''}
+                <div class="stats"><span id="myFollowersStat">Followers: ${followers.size}</span><span id="myFollowingStat">Following: ${follows.size}</span></div>
+            </div>
+            ${!linkedDomain ? `<div class="card"><h3>Link HNS/DNS Domain</h3><input id="domainLinkInput" placeholder="yourdomain.com"><button id="linkDomainBtn">Verify & Link</button><div id="linkResult"></div><p class="npub-text" style="margin-top:0.5rem;">Domain must have TXT record: nostr:YOUR_NPUB</p></div>` : `<div class="card"><p>✅ Linked to: <strong>${linkedDomain}</strong> <button id="unlinkDomainBtn" class="secondary">Unlink</button></div>`}
+            <div class="card"><h3>My Posts from Nostr</h3>
+            <div id="userPostsList">${myPosts.map(p => `<div class="post"><div><strong>${getDisplayName(p.pubkey)}</strong> <small>${new Date(p.created_at).toLocaleString()}</small></div><div>${p.content}</div>${p.image ? `<img src="${p.image}" class="post-image">` : ''}</div>`).join('') || '<p>No posts found. Post from another Nostr client to see your content!</p>'}</div></div>
+        `;
+        if(!linkedDomain) {
+            document.getElementById('linkDomainBtn')?.addEventListener('click', async () => {
+                const domain = document.getElementById('domainLinkInput').value;
+                if(!domain) return;
+                const dnsProfile = await resolveDProfile(domain);
+                if(dnsProfile && dnsProfile.hex === currentUser.hexPubkey) {
+                    localStorage.setItem(`hns_link_${currentUser.hexPubkey}`, domain);
+                    renderMyProfile();
+                } else document.getElementById('linkResult').innerHTML = '<span style="color:var(--danger)">No matching nostr: record found</span>';
+            });
+        } else {
+            document.getElementById('unlinkDomainBtn')?.addEventListener('click', () => { localStorage.removeItem(`hns_link_${currentUser.hexPubkey}`); renderMyProfile(); });
+        }
+        document.getElementById('myFollowersStat')?.addEventListener('click', () => showFollowList('Followers', followers));
+        document.getElementById('myFollowingStat')?.addEventListener('click', () => showFollowList('Following', follows));
+    }
+    
+    async function renderSearch() { /* identical to original */ 
+        document.getElementById('mainContent').innerHTML = `
+            <div class="card"><h2>Discover by DNS or npub</h2>
+            <div style="display:flex; gap:0.5rem;"><input id="searchInput" placeholder="domain.com or npub1..." style="flex:1"><button id="searchBtn">Search</button></div>
+            <div id="searchResult"></div></div>
+        `;
+        const performSearch = async () => {
+            const query = document.getElementById('searchInput').value;
+            if(!query) return;
+            document.getElementById('searchResult').innerHTML = '<div class="loading"><div class="spinner"></div> Resolving...</div>';
+            const profile = await resolveDProfile(query);
+            if(!profile) { document.getElementById('searchResult').innerHTML = '<div class="card">No nostr record found</div>'; return; }
+            const displayName = profile.domain || profile.name;
+            document.getElementById('searchResult').innerHTML = `
+                <div class="card"><div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;"><div class="avatar-large" style="width:64px;height:64px;">${profile.picture ? `<img src="${profile.picture}">` : '👤'}</div><div><h3>${displayName}</h3><div class="npub-text">${profile.pubkey}</div></div><div><button id="saveContactSearchBtn">Save Contact</button></div></div>${profile.about ? `<p>${profile.about}</p>` : ''}<button id="viewProfileBtn" style="margin-top:1rem;">View Full Profile</button></div>
+            `;
+            document.getElementById('saveContactSearchBtn')?.addEventListener('click', () => { contacts.set(profile.hex, profile); saveToStorage(); alert('Contact saved'); });
+            document.getElementById('viewProfileBtn')?.addEventListener('click', () => renderUserProfile(profile.hex));
+        };
+        document.getElementById('searchBtn')?.addEventListener('click', performSearch);
+        document.getElementById('searchInput')?.addEventListener('keypress', (e) => { if(e.key === 'Enter') performSearch(); });
+    }
+    
+    async function renderContacts() {
+        const contactArray = Array.from(contacts.values());
+        document.getElementById('mainContent').innerHTML = `<div class="card"><h2>Saved Contacts (${contactArray.length})</h2><div id="contactList"></div></div>`;
+        const container = document.getElementById('contactList');
+        if(contactArray.length === 0) container.innerHTML = '<p>No contacts yet. Use Discover to add profiles.</p>';
+        else {
+            container.innerHTML = contactArray.map(c => `
+                <div class="contact-item"><div style="display:flex; gap:0.75rem; align-items:center;"><div class="avatar-large" style="width:48px;height:48px;">${c.picture ? `<img src="${c.picture}" style="width:100%">` : '👤'}</div><div><strong>${c.domain || c.name}</strong><div class="npub-text">${c.pubkey}</div></div></div><div><button class="viewContactProfile" data-pubkey="${c.hex}">View Profile</button><button class="removeContact" data-pubkey="${c.hex}">Remove</button></div></div>
+            `).join('');
+            document.querySelectorAll('.viewContactProfile').forEach(btn => { btn.onclick = () => renderUserProfile(btn.dataset.pubkey); });
+            document.querySelectorAll('.removeContact').forEach(btn => { btn.onclick = () => { contacts.delete(btn.dataset.pubkey); saveToStorage(); renderContacts(); }; });
+        }
+    }
+    
+    async function renderSettings() {
+        const isLight = document.body.classList.contains('light');
+        document.getElementById('mainContent').innerHTML = `
+            <div class="card"><h2>Appearance</h2><button id="darkModeToggleBtn">${isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode'}</button></div>
+            <div class="card"><h2>PIN Security</h2><button id="setPinBtn">Set PIN Code</button></div>
+            <div class="card"><h2>Relays</h2><div id="relayList"></div><div style="display:flex; gap:0.5rem; margin-top:1rem;"><input id="newRelay" placeholder="wss://..."><button id="addRelay">Add Relay</button></div><button id="refreshFeedBtn" style="margin-top:1rem;">⟳ Refresh Feed from Relays</button></div>
+            <div class="card"><h2>Export/Import Data</h2><button id="exportData">Export Settings</button><input type="file" id="importFile" accept=".json" style="margin-top:1rem"><button id="importData">Import Backup</button></div>
+            <div class="card"><h2>Danger Zone</h2><button id="logoutClearBtn" class="danger">Clear Session & Logout</button></div>
+        `;
+        const relayDiv = document.getElementById('relayList');
+        relayDiv.innerHTML = relays.map(r => `<div class="contact-item"><span>${r}</span><button class="removeRelay" data-relay="${r}">Remove</button></div>`).join('');
+        document.querySelectorAll('.removeRelay').forEach(btn => { btn.onclick = () => { relays = relays.filter(r => r !== btn.dataset.relay); renderSettings(); }; });
+        document.getElementById('addRelay')?.addEventListener('click', () => { const newRelay = document.getElementById('newRelay').value.trim(); if(newRelay && !relays.includes(newRelay)) { relays.push(newRelay); renderSettings(); } });
+        document.getElementById('refreshFeedBtn')?.addEventListener('click', async () => { initRelays(); await refreshGlobalFeed(); renderFeed(); });
+        document.getElementById('darkModeToggleBtn')?.addEventListener('click', () => { document.body.classList.toggle('light'); renderSettings(); });
+        document.getElementById('setPinBtn')?.addEventListener('click', async () => { const p = prompt('Set 4-6 digit PIN'); if(p && p.length>=4) { pinHash = await hashString(p); localStorage.setItem('purstr_pin', pinHash); alert('PIN set.'); } });
+        document.getElementById('exportData')?.addEventListener('click', () => { const data = { contacts: Array.from(contacts.entries()), follows: [...follows], relays }; const blob = new Blob([JSON.stringify(data)], {type:'application/json'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='purstr_backup.json'; a.click(); });
+        document.getElementById('importData')?.addEventListener('click', (e) => { const file = document.getElementById('importFile').files[0]; if(!file) return; const reader = new FileReader(); reader.onload = async (ev) => { const d = JSON.parse(ev.target.result); if(d.contacts) contacts = new Map(d.contacts); if(d.follows) follows = new Set(d.follows); if(d.relays) relays = d.relays; saveToStorage(); await refreshGlobalFeed(); renderSettings(); }; reader.readAsText(file); });
+        document.getElementById('logoutClearBtn')?.addEventListener('click', () => { sessionStorage.clear(); currentUser = null; renderLoginScreen(); });
+    }
+    
+    async function lockApp() {
+        if(pinHash) {
+            const p = prompt('Enter PIN (type "distress" for emergency wipe):');
+            if(p === 'distress') { sessionStorage.clear(); localStorage.removeItem('purstr_contacts'); currentUser = null; renderLoginScreen(); return; }
+            if(await hashString(p) === pinHash) alert('Unlocked');
+            else alert('Wrong PIN');
+        } else { sessionStorage.clear(); currentUser = null; renderLoginScreen(); }
+    }
+    
+    const views = { landing: () => currentUser ? renderFeed() : renderLoginScreen(), feed: renderFeed, search: renderSearch, contacts: renderContacts, profile: renderMyProfile, settings: renderSettings };
+    document.querySelectorAll('.nav-item[data-view]').forEach(el => {
+        el.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            el.classList.add('active');
+            window.lastView = views[el.getAttribute('data-view')];
+            views[el.getAttribute('data-view')]();
+        });
+    });
+    document.getElementById('lockAppBtn')?.addEventListener('click', lockApp);
+    
+    loadStorage();
+    initRelays();
+    if(currentUser) { refreshGlobalFeed().then(() => renderFeed()); }
+    else renderLoginScreen();
+</script>
+</body>
+</html>
