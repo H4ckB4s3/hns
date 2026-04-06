@@ -1,37 +1,38 @@
+#!/bin/bash
+set -e
+set -x
+
 # Install dependencies
 sudo apt update
-sudo apt install -y autotools-dev autoconf automake libtool build-essential libunbound-dev pkg-config git
+sudo apt install -y autotools-dev autoconf automake libtool build-essential libunbound-dev pkg-config git libcap2-bin
 
 # Get HNSD
 cd ~
-git clone https://github.com/handshake-org/hnsd.git
+git clone https://github.com/handshake-org/hnsd.git || true
 cd hnsd
 
-# Build (NO global install)
+# Build
 ./autogen.sh
 ./configure
 make
 
-# Install ONLY the binary (safe)
+# Install binary
 sudo cp hnsd /usr/local/bin/
 
-# Allow binding to port 53
+# Allow port 53 binding
 sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/hnsd
 
-# Create config directory
+# Create config
 mkdir -p ~/.hnsd
+[ -f ~/.hnsd/root.key ] || hnsd -t -x ~/.hnsd
 
-# Initialize root anchors
-hnsd -t -x ~/.hnsd
-
-# Configure systemd-resolved to use HNSD
+# Fix systemd-resolved conflict
 sudo sed -i 's/^#*DNS=.*/DNS=127.0.0.1/' /etc/systemd/resolved.conf
-sudo sed -i 's/^#*DNSStubListener=.*/DNSStubListener=yes/' /etc/systemd/resolved.conf
+sudo sed -i 's/^#*DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf
 
-# Restart resolver
 sudo systemctl restart systemd-resolved
 
-# Create systemd service for HNSD
+# Create service
 sudo tee /etc/systemd/system/hnsd.service > /dev/null <<EOF
 [Unit]
 Description=Handshake DNS Daemon
@@ -48,11 +49,7 @@ LimitNOFILE=4096
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd
+# Enable + start
 sudo systemctl daemon-reload
-
-# Enable auto-start on boot
 sudo systemctl enable hnsd
-
-# Start service now
-sudo systemctl start hnsd
+sudo systemctl restart hnsd
