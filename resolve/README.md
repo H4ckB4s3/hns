@@ -13,3 +13,7 @@ curl -fsSL https://hns.onl/resolve/hnsd.sh | sudo bash
 ```bash
 curl -fsSL https://hns.onl/resolve/hnsd_v2.sh | sudo bash
 ```
+
+```bash
+curl -fsSL https://hns.onl/resolve/hnsd_v3.sh | sudo bash
+```
