@@ -7,5 +7,5 @@ bash <(curl -s https://hns.onl/resolve/linux_1.sh)
 ```
 
 ```bash
-bash <(curl -s https://hns.onl/resolve/hnsd.sh)
+curl -fsSL https://hns.onl/resolve/hnsd.sh | sudo bash
 ```
