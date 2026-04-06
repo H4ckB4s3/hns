@@ -9,3 +9,7 @@ bash <(curl -s https://hns.onl/resolve/linux_1.sh)
 ```bash
 curl -fsSL https://hns.onl/resolve/hnsd.sh | sudo bash
 ```
+
+```bash
+curl -fsSL https://hns.onl/resolve/hnsd_v2.sh | sudo bash
+```
