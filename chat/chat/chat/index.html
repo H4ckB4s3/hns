@@ -12,14 +12,11 @@
       --bg-primary: #0a0c10;
       --bg-secondary: #1a1e24;
       --bg-tertiary: #252b33;
-      --bg-hover: #2f3640;
       --text-primary: #ffffff;
-      --text-secondary: #b0b3b8;
       --text-muted: #8a8f99;
       --accent-blue: #0088cc;
-      --accent-green: #25D366;
       --accent-purple: #6e5be2;
-      --accent-red: #f15a5a;
+      --accent-green: #25D366;
       --border-color: #2f3540;
       --message-outgoing: #005e99;
       --message-incoming: #262d36;
@@ -34,7 +31,6 @@
       height: 100vh; height: 100dvh;
       overflow: hidden; position: fixed; width: 100%;
     }
-
     .login-screen {
       position: fixed; inset: 0; background: var(--bg-primary);
       display: flex; align-items: center; justify-content: center;
@@ -45,11 +41,6 @@
       width: 100%; max-width: 380px; background: var(--bg-secondary);
       border-radius: 28px; padding: 32px 24px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-      animation: slideUp 0.3s ease;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(40px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
     }
     .logo { text-align: center; margin-bottom: 28px; }
     .logo h1 {
@@ -69,10 +60,8 @@
       width: 100%; padding: 15px; border: none; border-radius: 14px;
       font-size: 16px; font-weight: 600; cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 8px;
-      transition: all 0.2s;
     }
     .btn-primary { background: var(--accent-blue); color: white; margin-top: 8px; }
-    .btn-primary:hover, .btn-primary:active { background: #006699; transform: scale(0.98); }
     .btn-primary:disabled { opacity: 0.5; pointer-events: none; }
     .status-text { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-muted); min-height: 20px; }
 
@@ -98,7 +87,7 @@
       font-weight: 700; font-size: 18px; flex-shrink: 0;
     }
     .user-info { flex: 1; min-width: 0; }
-    .user-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-name { font-weight: 600; font-size: 15px; }
     .user-room { font-size: 12px; color: var(--text-muted); }
     .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--online-indicator); }
     .status-dot.offline { background: #9e9e9e; }
@@ -118,8 +107,6 @@
       width: 36px; height: 36px; border-radius: 50%; background: var(--bg-tertiary);
       display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600;
     }
-    .user-item .name { font-size: 14px; font-weight: 500; }
-    .user-item .role { font-size: 11px; color: var(--text-muted); }
     .host-badge {
       background: var(--accent-purple); color: white; font-size: 9px;
       padding: 2px 6px; border-radius: 8px; margin-left: 6px;
@@ -143,10 +130,8 @@
 
     .messages-container {
       flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px;
-      -webkit-overflow-scrolling: touch;
     }
-    .message-wrapper { display: flex; margin-bottom: 2px; animation: msgIn 0.2s ease; }
-    @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .message-wrapper { display: flex; margin-bottom: 2px; }
     .message-wrapper.own { justify-content: flex-end; }
     .message-wrapper.system { justify-content: center; }
     .message-bubble {
@@ -161,7 +146,6 @@
       background: transparent; color: var(--text-muted); font-size: 12px; padding: 4px 10px;
     }
     .msg-meta { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 2px; }
-    .message-wrapper.own .msg-meta { text-align: right; }
     .message-time { font-size: 10px; color: var(--text-muted); margin-top: 4px; text-align: right; }
 
     .input-area {
@@ -178,16 +162,15 @@
     .send-btn {
       width: 46px; height: 46px; border-radius: 50%; border: none;
       background: var(--accent-blue); color: white; font-size: 18px;
-      cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
-    .send-btn:active { transform: scale(0.94); }
     .send-btn:disabled { opacity: 0.45; pointer-events: none; }
 
     .toast {
       position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
       background: var(--bg-tertiary); color: var(--text-primary); padding: 12px 22px;
       border-radius: 30px; font-size: 14px; z-index: 3000; display: none;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4); max-width: 90%; text-align: center;
+      max-width: 90%; text-align: center;
     }
   </style>
 </head>
@@ -252,28 +235,23 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    // ===================== CONFIG =====================
     const STUN = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' }
     ];
 
-    // ===================== STATE =====================
     let peer = null;
     let myId = '';
     let myNick = '';
     let roomName = '';
     let isHost = false;
-    let hostId = null;                    // current host peer ID (usually = roomName)
+    let hostId = null;
 
-    // Mesh
-    const connections = new Map();        // peerId → DataConnection
-    const online = new Map();             // peerId → nick
-
-    // Prevent duplicate messages
+    const connections = new Map();   // peerId → DataConnection
+    const online = new Map();        // peerId → nick
     const seenMessages = new Set();
 
-    // ===================== DOM =====================
+    // DOM
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
     const nickInput = document.getElementById('nickInput');
@@ -295,7 +273,6 @@
     const sidebar = document.getElementById('sidebar');
     const toast = document.getElementById('toast');
 
-    // ===================== HELPERS =====================
     function showToast(msg, ms = 2200) {
       toast.textContent = msg;
       toast.style.display = 'block';
@@ -332,7 +309,6 @@
       onlineCount.textContent = online.size;
       usersList.innerHTML = '';
 
-      // Self first
       const self = document.createElement('div');
       self.className = 'user-item';
       self.innerHTML = `
@@ -348,46 +324,40 @@
         if (id === myId) return;
         const el = document.createElement('div');
         el.className = 'user-item';
-        const isCurrentHost = id === hostId;
         el.innerHTML = `
           <div class="avatar-sm">${nick.charAt(0).toUpperCase()}</div>
           <div>
             <div class="name">${escapeHtml(nick)}
-              ${isCurrentHost ? '<span class="host-badge">HOST</span>' : ''}
+              ${id === hostId ? '<span class="host-badge">HOST</span>' : ''}
             </div>
-            <div class="role">${id.substring(0, 8)}…</div>
+            <div class="role" style="font-size:11px;color:var(--text-muted)">${id.substring(0,10)}…</div>
           </div>`;
         usersList.appendChild(el);
       });
     }
 
-    function setConnected(connected) {
-      if (connected) {
+    function setConnected(ok) {
+      if (ok) {
         connDot.classList.remove('offline');
         sendBtn.disabled = false;
       } else {
         connDot.classList.add('offline');
-        // keep send enabled if we still have mesh peers
         sendBtn.disabled = connections.size === 0 && !isHost;
       }
     }
 
-    // ===================== MESH CONNECTION =====================
+    // ---------- Mesh helpers ----------
     function setupDataConnection(conn, remoteNick = null) {
       const peerId = conn.peer;
-
-      // Already have this connection?
-      if (connections.has(peerId) && connections.get(peerId).open) {
-        return;
-      }
+      if (connections.has(peerId) && connections.get(peerId).open) return;
 
       connections.set(peerId, conn);
 
       conn.on('open', () => {
-        // Exchange nick if we don't know it yet
-        if (!online.has(peerId)) {
+        // Introduce ourselves
+        try {
           conn.send(JSON.stringify({ type: 'nick', nick: myNick }));
-        }
+        } catch (e) {}
         if (remoteNick) {
           online.set(peerId, remoteNick);
           updateUsersUI();
@@ -409,50 +379,57 @@
           updateUsersUI();
           systemMsg(`${nick} left`);
         }
-        // If this was the host
         if (peerId === hostId) {
           hostId = null;
           roomSub.textContent = 'host left – mesh still active';
-          systemMsg('Host left. You can still chat with remaining people.');
+          systemMsg('Host left. Remaining users can still chat.');
           showToast('Host left – room stays open');
         }
         setConnected(connections.size > 0 || isHost);
       });
-
-      conn.on('error', err => {
-        console.warn('DataConnection error', peerId, err);
-      });
     }
 
     function connectToPeer(remoteId, remoteNick = null) {
-      if (remoteId === myId) return;
+      if (!remoteId || remoteId === myId) return;
       if (connections.has(remoteId) && connections.get(remoteId).open) return;
 
       try {
         const conn = peer.connect(remoteId, { reliable: true });
         setupDataConnection(conn, remoteNick);
       } catch (e) {
-        console.warn('Failed to connect to', remoteId, e);
+        console.warn('connectToPeer failed', remoteId, e);
       }
     }
 
-    // ===================== MESSAGE HANDLING =====================
+    // Flood a message to every open connection except the one we received it from
+    function flood(msg, exceptId = null) {
+      const data = JSON.stringify(msg);
+      connections.forEach((conn, id) => {
+        if (id !== exceptId && conn.open) {
+          try { conn.send(data); } catch (e) {}
+        }
+      });
+    }
+
+    // ---------- Message handling ----------
     function handleMessage(msg, fromId) {
       switch (msg.type) {
         case 'nick':
-          online.set(fromId, msg.nick);
-          updateUsersUI();
+          if (msg.nick) {
+            online.set(fromId, msg.nick);
+            updateUsersUI();
+          }
           break;
 
         case 'welcome':
-          // Host sent us the full list
           hostId = msg.hostId || roomName;
           online.clear();
           online.set(myId, myNick);
           (msg.users || []).forEach(u => {
             if (u.id !== myId) {
               online.set(u.id, u.nick);
-              connectToPeer(u.id, u.nick);   // form mesh
+              // Form mesh – try connecting to everyone
+              connectToPeer(u.id, u.nick);
             }
           });
           updateUsersUI();
@@ -464,7 +441,7 @@
           if (msg.id === myId) return;
           online.set(msg.id, msg.nick);
           updateUsersUI();
-          connectToPeer(msg.id, msg.nick);   // form mesh
+          connectToPeer(msg.id, msg.nick);
           systemMsg(`${msg.nick} joined`);
           break;
 
@@ -482,47 +459,38 @@
           if (msg.msgId && seenMessages.has(msg.msgId)) return;
           if (msg.msgId) {
             seenMessages.add(msg.msgId);
-            // keep set from growing forever
-            if (seenMessages.size > 300) {
+            if (seenMessages.size > 400) {
               const first = seenMessages.values().next().value;
               seenMessages.delete(first);
             }
           }
-          if (msg.from === myId) return; // already shown locally
-          addChatMsg(msg.from, msg.nick, msg.text, false);
+
+          // Display if not from ourselves
+          if (msg.from !== myId) {
+            addChatMsg(msg.from, msg.nick, msg.text, false);
+          }
+
+          // IMPORTANT: re-flood so everyone receives it even with incomplete mesh
+          flood(msg, fromId);
           break;
       }
     }
 
-    // Broadcast to the whole mesh
-    function meshBroadcast(obj) {
-      const data = JSON.stringify(obj);
-      connections.forEach(conn => {
-        if (conn.open) {
-          try { conn.send(data); } catch (e) {}
-        }
-      });
-    }
-
-    // ===================== HOST LOGIC =====================
+    // ---------- Host logic ----------
     function becomeHost() {
       isHost = true;
       myId = roomName;
       hostId = roomName;
       online.set(myId, myNick);
       updateUsersUI();
-      roomSub.textContent = 'you are the host (mesh ready)';
+      roomSub.textContent = 'you are the host';
       setConnected(true);
       systemMsg('Room created. Waiting for others…');
       showToast('You are the host');
     }
 
     function hostHandleIncoming(conn) {
-      // This is a new peer connecting to the room ID
-      conn.on('open', () => {
-        // wait for hello
-      });
-
+      // Single data handler that covers both hello and later chat
       conn.on('data', raw => {
         let msg;
         try { msg = JSON.parse(raw); } catch { return; }
@@ -531,27 +499,31 @@
           const newId = conn.peer;
           const newNick = msg.nick || 'Anon';
 
-          // Add to our mesh view
           online.set(newId, newNick);
-          setupDataConnection(conn, newNick);   // host also keeps direct connection
+          setupDataConnection(conn, newNick); // also registers the normal handler
           updateUsersUI();
 
-          // 1. Send full list to the newcomer
+          // Send full roster to the newcomer
           const users = Array.from(online.entries()).map(([id, nick]) => ({ id, nick }));
-          conn.send(JSON.stringify({
-            type: 'welcome',
-            hostId: myId,
-            users
-          }));
+          try {
+            conn.send(JSON.stringify({
+              type: 'welcome',
+              hostId: myId,
+              users
+            }));
+          } catch (e) {}
 
-          // 2. Tell everyone else about the new peer
-          meshBroadcast({
+          // Tell everyone else
+          flood({
             type: 'user-joined',
             id: newId,
             nick: newNick
-          });
+          }, newId);
 
           systemMsg(`${newNick} joined`);
+        } else {
+          // All other messages (chat, nick, …) go through the normal path
+          handleMessage(msg, conn.peer);
         }
       });
 
@@ -562,47 +534,34 @@
           online.delete(peerId);
           connections.delete(peerId);
           updateUsersUI();
-          meshBroadcast({ type: 'user-left', id: peerId, nick });
+          flood({ type: 'user-left', id: peerId, nick });
           systemMsg(`${nick} left`);
         }
       });
     }
 
-    // ===================== CLIENT JOIN =====================
+    // ---------- Client join ----------
     function joinAsClient() {
       isHost = false;
       const conn = peer.connect(roomName, { reliable: true });
 
-      // Temporary connection just to get the welcome + introductions
       conn.on('open', () => {
-        conn.send(JSON.stringify({ type: 'hello', nick: myNick }));
+        try {
+          conn.send(JSON.stringify({ type: 'hello', nick: myNick }));
+        } catch (e) {}
       });
 
-      conn.on('data', raw => {
-        let msg;
-        try { msg = JSON.parse(raw); } catch { return; }
-        handleMessage(msg, conn.peer);
-      });
-
-      conn.on('close', () => {
-        // Host may have left – mesh should already be formed
-        if (hostId === roomName) {
-          hostId = null;
-          roomSub.textContent = 'host left – mesh still active';
-        }
-      });
+      // Re-use the same setup so chat works on this link too
+      setupDataConnection(conn);
 
       conn.on('error', err => {
         console.error(err);
         statusText.textContent = 'Could not reach host. Try creating the room yourself.';
         joinBtn.disabled = false;
       });
-
-      // Also treat this connection as part of the mesh
-      setupDataConnection(conn);
     }
 
-    // ===================== START =====================
+    // ---------- Start ----------
     function start() {
       myNick = nickInput.value.trim() || 'Anon';
       roomName = (roomInput.value.trim() || 'peaceroom').toLowerCase().replace(/[^a-z0-9-_]/g, '');
@@ -611,25 +570,23 @@
       joinBtn.disabled = true;
       statusText.textContent = 'Connecting…';
 
-      // Try to become host first
       peer = new Peer(roomName, {
         config: { iceServers: STUN },
         debug: 1
       });
 
       peer.on('open', id => {
-        // We successfully claimed the room ID
         becomeHost();
         finishLogin();
       });
 
       peer.on('connection', conn => {
         if (isHost) hostHandleIncoming(conn);
+        else setupDataConnection(conn);
       });
 
       peer.on('error', err => {
         if (err.type === 'unavailable-id') {
-          // Room already exists → join as normal peer
           peer.destroy();
 
           peer = new Peer({
@@ -646,7 +603,6 @@
           });
 
           peer.on('connection', conn => {
-            // Incoming mesh connection from another peer
             setupDataConnection(conn);
           });
 
@@ -672,12 +628,12 @@
       roomTitle.textContent = roomName;
     }
 
-    // ===================== SEND CHAT =====================
+    // ---------- Send ----------
     function sendMessage() {
       const text = msgInput.value.trim();
       if (!text) return;
 
-      const msgId = myId + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      const msgId = myId + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
       const payload = {
         type: 'chat',
         from: myId,
@@ -686,18 +642,18 @@
         msgId
       };
 
-      // Show locally immediately
+      // Show locally
       addChatMsg(myId, myNick, text, true);
       seenMessages.add(msgId);
 
-      // Send to entire mesh
-      meshBroadcast(payload);
+      // Send to whole mesh
+      flood(payload);
 
       msgInput.value = '';
       msgInput.style.height = 'auto';
     }
 
-    // ===================== EVENTS =====================
+    // Events
     joinBtn.addEventListener('click', start);
     nickInput.addEventListener('keypress', e => { if (e.key === 'Enter') start(); });
     roomInput.addEventListener('keypress', e => { if (e.key === 'Enter') start(); });
