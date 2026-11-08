@@ -1,0 +1,255 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handshake Nostr Resolver</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 30px 15px;
+  background: #101116;
+  color: #eee;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  max-width: 700px;
+  margin: auto;
+}
+
+h1 {
+  color: #a78bfa;
+}
+
+input, button {
+  padding: 13px;
+  border-radius: 7px;
+  font-size: 15px;
+}
+
+input {
+  width: 100%;
+  margin-bottom: 10px;
+  background: #20212a;
+  color: white;
+  border: 1px solid #444;
+}
+
+button {
+  width: 100%;
+  background: #7950dc;
+  color: white;
+  border: 0;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+button:disabled {
+  opacity: .5;
+}
+
+pre {
+  background: #1b1c24;
+  border: 1px solid #333;
+  padding: 15px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-height: 100px;
+  color: #c4f1c4;
+}
+
+.status {
+  color: #aaa;
+  margin: 15px 0;
+}
+
+.step {
+  padding: 10px;
+  margin: 7px 0;
+  background: #1b1c24;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.success {
+  color: #62df91;
+}
+
+.error {
+  color: #ff7777;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>Handshake Nostr Resolver</h1>
+<p>Resolve a Handshake domain and retrieve its Nostr identity.</p>
+
+<input
+  id="domain"
+  type="text"
+  value="hnsbroker"
+  placeholder="Enter Handshake domain"
+/>
+
+<button id="resolveBtn" onclick="resolveDomain()">
+  Resolve Nostr Identity
+</button>
+
+<div id="status" class="status">Ready.</div>
+
+<div id="steps"></div>
+
+<h3>Response</h3>
+<pre id="result">Waiting for lookup...</pre>
+
+</div>
+
+<script>
+const DOH_ENDPOINT = "https://api.web3dns.net/";
+
+function logStep(message, success = null) {
+  const div = document.createElement("div");
+  div.className = "step";
+
+  if (success === true) div.classList.add("success");
+  if (success === false) div.classList.add("error");
+
+  div.textContent = message;
+  document.getElementById("steps").appendChild(div);
+}
+
+async function resolveDomain() {
+  const domain = document.getElementById("domain")
+    .value.trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .replace(/\.$/, "");
+
+  const status = document.getElementById("status");
+  const result = document.getElementById("result");
+  const button = document.getElementById("resolveBtn");
+
+  document.getElementById("steps").innerHTML = "";
+  result.textContent = "";
+  
+  if (!domain || !/^[a-z0-9.-]+$/i.test(domain)) {
+    status.textContent = "Enter a valid domain.";
+    return;
+  }
+
+  button.disabled = true;
+
+  try {
+    // STEP 1: DoH lookup
+    status.textContent = "Querying Handshake DNS...";
+
+    const dohResponse = await fetch(
+      DOH_ENDPOINT + "?name=" + encodeURIComponent(domain)
+    );
+
+    if (!dohResponse.ok) {
+      throw new Error("DoH HTTP error: " + dohResponse.status);
+    }
+
+    const dns = await dohResponse.json();
+
+    const records = (dns.Answer || []).filter(
+      record => record.type === 1 || record.type === 28
+    );
+
+    if (!records.length) {
+      throw new Error("No A or AAAA DNS records found.");
+    }
+
+    const ips = records.map(record => record.data);
+
+    logStep("DNS resolved: " + ips.join(", "), true);
+
+    // STEP 2: Try hostname URL
+    status.textContent = "Fetching Nostr identity...";
+
+    const hostnameURL =
+      "http://" + domain + "/.well-known/nostr.json";
+
+    try {
+      const response = await fetch(hostnameURL);
+
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+      }
+
+      const data = await response.json();
+
+      showResult(data, "Hostname request successful");
+      return;
+
+    } catch (error) {
+      logStep("Hostname request failed: " + error.message, false);
+    }
+
+    // STEP 3: Try resolved IP
+    for (const ip of ips) {
+      const ipURL =
+        "http://" + (ip.includes(":") ? "[" + ip + "]" : ip) +
+        "/.well-known/nostr.json";
+
+      try {
+        logStep("Trying IP: " + ip);
+
+        const response = await fetch(ipURL);
+
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+
+        const data = await response.json();
+
+        showResult(data, "IP request successful");
+        return;
+
+      } catch (error) {
+        logStep("IP request failed: " + error.message, false);
+      }
+    }
+
+    status.textContent = "DNS worked, but Nostr JSON could not be fetched.";
+
+    result.textContent =
+      "Possible causes:\n" +
+      "- CORS restrictions\n" +
+      "- HTTP blocked by browser\n" +
+      "- Server requires hostname-based routing\n" +
+      "- Nostr endpoint unavailable\n\n" +
+      "Resolved IP: " + ips.join(", ");
+
+  } catch (error) {
+    status.textContent = "Resolution failed.";
+    result.textContent = error.name + ": " + error.message;
+    logStep(error.message, false);
+
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function showResult(data, message) {
+  document.getElementById("status").textContent = message;
+  logStep(message, true);
+
+  document.getElementById("result").textContent =
+    JSON.stringify(data, null, 2);
+}
+</script>
+</body>
+</html>
