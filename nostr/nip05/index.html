@@ -1,0 +1,133 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NIP-05 Resolver</title>
+<style>
+body {
+  background:#111827;color:#eee;
+  font-family:system-ui;max-width:800px;
+  margin:30px auto;padding:20px;
+}
+input,button {
+  padding:12px;border-radius:7px;
+  border:1px solid #475569;font-size:16px;
+}
+input {width:65%;background:#1f2937;color:white}
+button {background:#2563eb;color:white;cursor:pointer}
+pre {
+  background:#1f2937;padding:15px;
+  border-radius:8px;overflow:auto;white-space:pre-wrap;
+}
+h3 {margin-top:25px}
+</style>
+</head>
+<body>
+
+<h2>NIP-05 Resolver</h2>
+
+<input id="identifier" placeholder="alice@example.com">
+<button onclick="lookup()">Resolve</button>
+
+<p id="status">Ready</p>
+
+<h3>Web3DNS results</h3>
+<pre id="dns">Waiting...</pre>
+
+<h3>NIP-05 nostr.json</h3>
+<pre id="nostr">Waiting...</pre>
+
+<script>
+async function lookup() {
+  const identifier =
+    document.getElementById("identifier").value.trim();
+
+  const match =
+    /^([^@]+)@([^@]+)$/.exec(identifier);
+
+  if (!match) {
+    alert("Enter username@domain.com");
+    return;
+  }
+
+  const username = match[1];
+  const domain = match[2];
+
+  const status = document.getElementById("status");
+  const dnsOut = document.getElementById("dns");
+  const nostrOut = document.getElementById("nostr");
+
+  status.textContent = "Resolving...";
+  dnsOut.textContent = "";
+  nostrOut.textContent = "";
+
+  // DNS lookup through Web3DNS
+  const records = ["TXT", "A", "AAAA"];
+
+  for (const type of records) {
+    try {
+      const url =
+        "https://api.web3dns.net/?name=" +
+        encodeURIComponent(domain) +
+        "&type=" + type;
+
+      const response = await fetch(url);
+
+      if (!response.ok)
+        throw new Error("HTTP " + response.status);
+
+      const data = await response.json();
+
+      dnsOut.textContent +=
+        "\n--- " + type + " ---\n" +
+        JSON.stringify(data, null, 2) + "\n";
+
+    } catch (e) {
+      dnsOut.textContent +=
+        "\n" + type + ": " + e.message + "\n";
+    }
+  }
+
+  // NIP-05 HTTPS lookup
+  try {
+    const url =
+      "https://" + domain +
+      "/.well-known/nostr.json?name=" +
+      encodeURIComponent(username);
+
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" }
+    });
+
+    if (!response.ok)
+      throw new Error("HTTP " + response.status);
+
+    const data = await response.json();
+
+    nostrOut.textContent =
+      JSON.stringify(data, null, 2);
+
+    const pubkey = data.names?.[username];
+
+    if (pubkey) {
+      nostrOut.textContent +=
+        "\n\nResolved public key:\n" + pubkey;
+    }
+
+    status.textContent = "NIP-05 lookup successful";
+
+  } catch (e) {
+    nostrOut.textContent =
+      "Could not fetch NIP-05 JSON.\n\n" +
+      e.message +
+      "\n\nThe domain may block CORS, or the HTTPS request may have failed.";
+
+    status.textContent = "NIP-05 lookup failed";
+  }
+}
+</script>
+
+</body>
+</html>
