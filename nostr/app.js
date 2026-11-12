@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupModals();
   setupMobileMenu();
   setupQrModal();
+  setupScannerModal();
   setupNostrLinkDelegation();
   await tryAutoUnlock();
   updateAuthNav();
@@ -343,9 +344,8 @@ function loadFollowing() {
   }
 }
 function saveFollowing() {
-  try {
-    localStorage.setItem('cosanostr-following', JSON.stringify(following));
-  } catch (e) { console.warn('Could not save following', e); }
+  try { localStorage.setItem('cosanostr-following', JSON.stringify(following)); }
+  catch (e) { console.warn('Could not save following', e); }
 }
 function isFollowing(npub) {
   if (!npub || !Array.isArray(following)) return false;
@@ -1237,11 +1237,9 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
       temp.innerHTML = headerHtml;
       existing.replaceWith(temp.firstElementChild);
     } else {
-      // No header yet (first render) — build it, then append a fresh #feed.
       content.innerHTML = headerHtml + '<div id="feed"></div>';
     }
 
-    // Re-bind header-only handlers
     const followBtnEl = document.getElementById('followBtn');
     if (followBtnEl) {
       followBtnEl.onclick = (e) => {
@@ -1255,7 +1253,6 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
       document.getElementById('editProfileBtn').onclick = () => showEditForm(meta);
     }
 
-    // If we're asked to render posts into the existing #feed, do that.
     if (!opts.skipPosts) {
       const feed = document.getElementById('feed');
       if (feed) {
@@ -1688,6 +1685,84 @@ function openQR() {
   rebuildQrUi();
   updateQrSelection('npub');
   qrModal.classList.add('active');
+}
+
+// ========== QR SCANNER ==========
+let scannerInstance = null;
+
+function setupScannerModal() {
+  const modal = document.getElementById('scannerModal');
+  const closeBtn = document.getElementById('closeScanner');
+  const statusEl = document.getElementById('scannerStatus');
+  if (!modal) return;
+  if (closeBtn) closeBtn.onclick = () => stopScanner();
+  modal.addEventListener('click', (e) => { if (e.target === modal) stopScanner(); });
+
+  function stopScanner() {
+    if (scannerInstance) {
+      try { scannerInstance.stop(); scannerInstance.destroy(); } catch (e) {}
+      scannerInstance = null;
+    }
+    const v = document.getElementById('scannerVideo');
+    if (v && v.srcObject) {
+      try { v.srcObject.getTracks().forEach(t => t.stop()); } catch (e) {}
+      v.srcObject = null;
+    }
+    modal.classList.remove('active');
+    if (statusEl) statusEl.textContent = 'Starting camera…';
+  }
+  window.stopScanner = stopScanner;
+}
+
+function openScanner() {
+  if (typeof QrScanner === 'undefined') {
+    alert(
+      'QR scanner not loaded.\n\n' +
+      'Make sure qr-scanner.js is the UMD build ' +
+      '(https://cdn.jsdelivr.net/npm/qr-scanner@1.4.2/qr-scanner.umd.min.js) ' +
+      'loaded with a plain <script src="qr-scanner.js"></script>, ' +
+      'and that qr-scanner-worker.min.js sits next to index.html.\n\n' +
+      'Also serve the app over http://localhost or https:// — ' +
+      'camera access is blocked on file:// .'
+    );
+    return;
+  }
+
+  const modal = document.getElementById('scannerModal');
+  const statusEl = document.getElementById('scannerStatus');
+  const video = document.getElementById('scannerVideo');
+  modal.classList.add('active');
+  if (statusEl) statusEl.textContent = 'Requesting camera…';
+
+  // NOTE: 1.4.x loads the worker automatically. Do NOT set QrScanner.WORKER_PATH.
+  try {
+    scannerInstance = new QrScanner(
+      video,
+      (result) => {
+        const value = typeof result === 'string' ? result : (result && result.data) || '';
+        if (!value) return;
+        searchInput.value = value;
+        searchInput.dispatchEvent(new Event('input'));
+        const ev = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+        searchInput.dispatchEvent(ev);
+        window.stopScanner();
+      },
+      {
+        returnDetailedScanResult: true,
+        highlightScanRegion: true,
+        highlightCodeOutline: true
+      }
+    );
+    scannerInstance.start()
+      .then(() => { if (statusEl) statusEl.textContent = 'Point the camera at a QR code.'; })
+      .catch(err => {
+        console.error('Scanner start failed:', err);
+        if (statusEl) statusEl.textContent = 'Camera error: ' + (err && err.message ? err.message : err);
+      });
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Scanner error: ' + e.message;
+  }
 }
 
 // ========== SETTINGS ==========
@@ -2135,3 +2210,4 @@ function npubToHexLenient(npub) {
 window.copyToClipboard = copyToClipboard;
 window.openQR = openQR;
 window.showProfile = showProfile;
+window.openScanner = openScanner;
