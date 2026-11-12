@@ -33,7 +33,6 @@ let relays = JSON.parse(localStorage.getItem('cosanostr-relays') || 'null') || [
 let dnsServers = JSON.parse(localStorage.getItem('cosanostr-dns') || 'null') || [...DEFAULT_DNS_SERVERS];
 let nip05ApiUrl = localStorage.getItem('cosanostr-nip05-api') || DEFAULT_NIP05_API;
 
-// DoH endpoints list (with one-shot migration from legacy key)
 let dohEndpoints = (function () {
   try {
     const list = JSON.parse(localStorage.getItem('cosanostr-doh-endpoints') || 'null');
@@ -54,7 +53,6 @@ let encryptedKey = null;
 let theme = localStorage.getItem('cosanostr-theme') || 'dark';
 let profileCache = new Map();
 
-// local profile meta (domain + nip05) keyed by pubhex
 function loadLocalProfileMeta() {
   try { return JSON.parse(localStorage.getItem('cosanostr-profile-meta') || '{}'); }
   catch (e) { return {}; }
@@ -68,7 +66,6 @@ function getLocalProfileMeta(hex) {
   return all[hex] || {};
 }
 
-// bookmarks (local)
 let bookmarks = (function () {
   try {
     const a = JSON.parse(localStorage.getItem('cosanostr-bookmarks') || '[]');
@@ -135,7 +132,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   hydrateFollowingMetadata();
   refreshRightFollowingFeed();
 
-  // First-visit / logged-out → prompt login directly.
   if (!unlocked && !currentUser) {
     openLoginModal();
   }
@@ -146,7 +142,6 @@ function setupRelayCardLink() {
   if (c) c.addEventListener('click', () => showView('settings'));
 }
 
-// Global delegated handler for `nostr:npub…` / `nostr:nprofile…` links.
 function setupNostrLinkDelegation() {
   content.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('a.nostr-ref');
@@ -222,13 +217,11 @@ async function handleSearchInput() {
   searchInput.classList.remove('valid');
   if (!query) return;
 
-  // 1) npub / nprofile
   if (query.startsWith('npub') || query.startsWith('nprofile')) {
     searchInput.classList.add('valid');
     return;
   }
 
-  // 2) NIP-05 (user@domain)
   if (query.includes('@')) {
     const at = query.lastIndexOf('@');
     const user = query.slice(0, at);
@@ -236,21 +229,19 @@ async function handleSearchInput() {
     if (user && host && host.includes('.')) { searchInput.classList.add('valid'); return; }
   }
 
-  // 3) domain TXT (plain domain, *.cosanostr, cosanostr/sld.tld)
   const norm = normalizeDomainQuery(query);
-  if (norm && norm.domain.includes('.')) {
+  if (norm) {
     const hasRecord = await checkDomainForNostr(norm.domain);
     if (hasRecord) searchInput.classList.add('valid');
   }
 }
 
-// handle `*.cosanostr` and `cosanostr/sld.tld`, plus plain domains
+// Accept bare names (HNS), plain domains, *.cosanostr, cosanostr/sld.tld
 function normalizeDomainQuery(query) {
   if (!query) return null;
   let q = query.trim().toLowerCase().replace(/^https?:\/\//, '');
   if (!q) return null;
 
-  // cosanostr/sld.tld -> sld.tld
   const slash = q.indexOf('/');
   if (slash !== -1) {
     const left = q.slice(0, slash);
@@ -259,14 +250,14 @@ function normalizeDomainQuery(query) {
     return null;
   }
 
-  // foo.cosanostr -> foo
   if (q.endsWith('.cosanostr') && q.length > '.cosanostr'.length) {
     const d = q.slice(0, -'.cosanostr'.length);
     return { domain: d, displayName: d };
   }
 
-  // plain domain
-  if (q.includes('.') && !q.includes('@')) return { domain: q, displayName: q };
+  if (q.includes('@') || q.startsWith('npub') || q.startsWith('nprofile')) return null;
+  if (/\s/.test(q)) return null;
+  if (/^[a-z0-9._-]+$/.test(q)) return { domain: q, displayName: q };
   return null;
 }
 
@@ -281,13 +272,11 @@ async function checkDomainForNostr(domain) {
 async function performSearch(query) {
   if (!query) return;
 
-  // 1) npub / nprofile
   if (query.startsWith('npub') || query.startsWith('nprofile')) {
     showProfile(query);
     return;
   }
 
-  // 2) NIP-05 (user@domain)
   if (query.includes('@')) {
     const at = query.lastIndexOf('@');
     const user = query.slice(0, at);
@@ -299,7 +288,6 @@ async function performSearch(query) {
     try { nip05Npub = await resolveNip05(user, host); } catch (e) { console.warn(e); }
     if (nip05Npub) { showProfile(nip05Npub, host, nip05); return; }
 
-    // fallback: domain TXT
     let txtDirect = null;
     try { txtDirect = await resolveDomainToNpub(host); } catch (e) { console.warn(e); }
     if (txtDirect) { showProfile(txtDirect, host, nip05); return; }
@@ -308,14 +296,12 @@ async function performSearch(query) {
     return;
   }
 
-  // 3) domain TXT (incl. *.cosanostr and cosanostr/sld.tld)
   const norm = normalizeDomainQuery(query);
   if (norm) {
     const npub = await resolveDomainToNpub(norm.domain);
     if (npub) { showProfile(npub, norm.displayName); return; }
   }
 
-  // 4) free-text note search
   searchNotes(query);
 }
 
@@ -681,8 +667,12 @@ function handleRelayMessage(raw) {
         const active = document.querySelector('.nav-item.active');
         const view = active ? active.dataset.view : null;
         if (view === 'explore') {
-          if (!feed.querySelector(`[data-id="${event.id}"]`) && !(window.SpamFilter && window.SpamFilter.shouldHide(event)))
-            renderNote(event);
+          if (!feed.querySelector(`[data-id="${event.id}"]`)) {
+            const cfg = window.ExploreFilter ? window.ExploreFilter.load() : null;
+            const text = (splitNoteContent(event.content || '').text || event.content || '');
+            const hide = cfg ? window.ExploreFilter.shouldHide(event, text, cfg) : false;
+            if (!hide) renderNote(event);
+          }
         } else if (view === 'home') {
           const followed = following.some(f => npubToHexLenient(f.npub) === event.pubkey);
           if (followed && !feed.querySelector(`[data-id="${event.id}"]`)) renderNote(event);
@@ -852,19 +842,40 @@ function setupInfiniteScroll() {
 }
 
 async function renderExplore() {
-  content.innerHTML = '<div id="feed"></div>';
+  const cfg = window.ExploreFilter ? window.ExploreFilter.load() : { spam: true };
+  content.innerHTML = `
+    <div class="explore-filter-bar">
+      <button id="exploreFilterBtn" class="secondary">Filters</button>
+    </div>
+    <div id="feed"></div>
+  `;
+  const filterBtn = document.getElementById('exploreFilterBtn');
+  if (filterBtn) filterBtn.onclick = () => window.ExploreFilter && window.ExploreFilter.open();
+
   await ensureRelaysReady();
-  queryRelaysLive({ kinds: [1], limit: 60 });
-  setTimeout(() => {
-    document.querySelectorAll('#feed .note').forEach(node => {
-      if (window.SpamFilter && node._event && window.SpamFilter.shouldHide(node._event)) {
-        node.remove();
-      }
-    });
-    const events = Array.from(document.querySelectorAll('.note[data-pubkey]'))
-      .map(n => ({ pubkey: n.dataset.pubkey }));
-    if (events.length) hydrateNoteAuthors(events);
-  }, 2500);
+  const filter = { kinds: [1], limit: 80 };
+  const events = await queryRelays(filter, 10000);
+  const feed = document.getElementById('feed');
+  if (!feed) return;
+  events.sort((a, b) => b.created_at - a.created_at);
+  let shown = 0;
+  events.forEach(ev => {
+    const { text } = splitNoteContent(ev.content || '');
+    const text2 = text || ev.content || '';
+    const hide = window.ExploreFilter
+      ? window.ExploreFilter.shouldHide(ev, text2, cfg)
+      : (window.SpamFilter && window.SpamFilter.shouldHide(ev));
+    if (hide) return;
+    if (feed.querySelector(`[data-id="${ev.id}"]`)) return;
+    renderNote(ev, true);
+    shown++;
+  });
+  if (shown === 0) {
+    feed.innerHTML = '<div class="empty">No notes match your filters. Try relaxing them.</div>';
+  }
+  hydrateNoteAuthors(events);
+  // Live updates still respect the filter via handleRelayMessage
+  queryRelaysLive({ kinds: [1], limit: 40 });
 }
 
 async function postNote() {
@@ -899,6 +910,10 @@ async function signEventAny(event) {
 }
 
 // ========== NOTIFICATIONS ==========
+// Show:
+//   - follows (kind 3) from followed authors that include me
+//   - likes (kind 7) from followed authors on my notes
+//   - mentions (kind 1) from followed authors that tag my hex / npub / domain / nip05
 async function renderNotifications() {
   if (!currentUser) {
     content.innerHTML = '<div class="empty">Log in to see mentions.</div>';
@@ -910,20 +925,44 @@ async function renderNotifications() {
   const myDomain = local.domain ? String(local.domain).toLowerCase() : null;
   const myNip05 = local.nip05 ? String(local.nip05).toLowerCase() : null;
 
-  content.innerHTML = '<div id="feed"></div>';
+  content.innerHTML = `
+    <div style="padding:16px; border-bottom:1px solid var(--border); font-weight:700; font-size:1.2rem;">Notifications</div>
+    <div id="feed"></div>
+  `;
   await ensureRelaysReady();
 
   const authors = followedHexList();
   if (!authors.length) {
-    content.innerHTML = '<div class="empty">Follow some accounts to see mentions here.</div>';
+    document.getElementById('feed').innerHTML = '<div class="empty">Follow some accounts to see notifications here.</div>';
     return;
   }
 
-  const pEvents = await queryRelays({ authors, kinds: [1], '#p': [myHex], limit: 50 });
-  const allEvents = await queryRelays({ authors, kinds: [1], limit: 100 });
-  const seen = new Set(pEvents.map(e => e.id));
-  const textMentions = allEvents.filter(ev => {
-    if (seen.has(ev.id)) return false;
+  // 1) My recent notes — needed to check likes on them
+  const myNotes = await queryRelays({ authors: [myHex], kinds: [1], limit: 50 });
+  const myNoteIds = myNotes.map(e => e.id);
+
+  // 2) Mentions via #p tag
+  const pMentionsPromise = queryRelays({ authors, kinds: [1], '#p': [myHex], limit: 50 });
+
+  // 3) Text mentions (npub / domain / nip05) — do a broad query then filter client-side
+  const allKind1Promise = queryRelays({ authors, kinds: [1], limit: 150 });
+
+  // 4) Likes from followed authors on my notes
+  const likesPromise = myNoteIds.length
+    ? queryRelays({ authors, kinds: [7], '#e': myNoteIds, limit: 200 })
+    : Promise.resolve([]);
+
+  // 5) Follows from followed authors (kind 3) that include me
+  const followsPromise = queryRelays({ authors, kinds: [3], '#p': [myHex], limit: 100 });
+
+  const [pMentions, allKind1, likes, follows] = await Promise.all([
+    pMentionsPromise, allKind1Promise, likesPromise, followsPromise
+  ]);
+
+  // Text mentions
+  const seenIds = new Set(pMentions.map(e => e.id));
+  const textMentions = allKind1.filter(ev => {
+    if (seenIds.has(ev.id)) return false;
     const c = (ev.content || '').toLowerCase();
     if (myNpub && c.includes(myNpub.toLowerCase())) return true;
     if (myDomain && c.includes(myDomain)) return true;
@@ -931,15 +970,92 @@ async function renderNotifications() {
     return false;
   });
 
-  const merged = [...pEvents, ...textMentions].sort((a, b) => b.created_at - a.created_at);
+  // Sort all mention-notes together
+  const mentionNotes = [...pMentions, ...textMentions].sort((a, b) => b.created_at - a.created_at);
+
+  // Likes on my notes (dedupe by reactor + note)
+  const likeKey = l => `${l.pubkey}:${(l.tags.find(t => t[0] === 'e') || [])[1]}`;
+  const likeMap = new Map();
+  likes.forEach(l => { if (!likeMap.has(likeKey(l))) likeMap.set(likeKey(l), l); });
+  const likeList = Array.from(likeMap.values());
+
+  // Follows (dedupe by follower)
+  const followMap = new Map();
+  follows.forEach(f => {
+    if (f.pubkey === myHex) return;
+    if (!(f.tags || []).some(t => t[0] === 'p' && t[1] === myHex)) return;
+    followMap.set(f.pubkey, f);
+  });
+  const followList = Array.from(followMap.values());
+
   const feed = document.getElementById('feed');
   if (!feed) return;
-  if (!merged.length) {
-    feed.innerHTML = '<div class="empty">No mentions found.</div>';
-    return;
+
+  // Follows block
+  if (followList.length) {
+    const wrap = document.createElement('div');
+    wrap.style.padding = '12px 16px';
+    wrap.style.borderBottom = '1px solid var(--border)';
+    wrap.innerHTML = `<div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:8px;">New follows</div>`;
+    followList.forEach(f => {
+      const np = NostrCrypto.hexToNpub(f.pubkey);
+      const meta = profileCache.get(f.pubkey) || {};
+      const nm = meta.name || meta.display_name || (np ? shortenNpub(np) : f.pubkey.slice(0, 12));
+      const pic = meta.picture || null;
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:6px 0; cursor:pointer;';
+      row.innerHTML = `
+        <div class="avatar" style="width:32px;height:32px;font-size:0.8rem;">${pic ? `<img src="${escapeAttr(pic)}" onerror="this.style.display='none'">` : escapeHtml((nm[0]||'?').toUpperCase())}</div>
+        <div style="font-size:0.9rem;"><strong>${escapeHtml(nm)}</strong> followed you</div>
+      `;
+      if (np) row.onclick = () => showProfile(np);
+      wrap.appendChild(row);
+    });
+    feed.appendChild(wrap);
   }
-  merged.forEach(ev => renderNote(ev, true));
-  hydrateNoteAuthors(merged);
+
+  // Likes block
+  if (likeList.length) {
+    const wrap = document.createElement('div');
+    wrap.style.padding = '12px 16px';
+    wrap.style.borderBottom = '1px solid var(--border)';
+    wrap.innerHTML = `<div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:8px;">New likes</div>`;
+    likeList.sort((a, b) => b.created_at - a.created_at).forEach(l => {
+      const np = NostrCrypto.hexToNpub(l.pubkey);
+      const meta = profileCache.get(l.pubkey) || {};
+      const nm = meta.name || meta.display_name || (np ? shortenNpub(np) : l.pubkey.slice(0, 12));
+      const pic = meta.picture || null;
+      const targetId = (l.tags.find(t => t[0] === 'e') || [])[1];
+      const target = myNotes.find(n => n.id === targetId);
+      const preview = target ? (splitNoteContent(target.content || '').text || target.content || '').slice(0, 120) : '';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:flex-start; gap:8px; padding:6px 0; cursor:pointer;';
+      row.innerHTML = `
+        <div class="avatar" style="width:32px;height:32px;font-size:0.8rem;">${pic ? `<img src="${escapeAttr(pic)}" onerror="this.style.display='none'">` : escapeHtml((nm[0]||'?').toUpperCase())}</div>
+        <div style="font-size:0.9rem; flex:1; min-width:0;">
+          <div><strong>${escapeHtml(nm)}</strong> liked your note</div>
+          ${preview ? `<div style="color:var(--text-secondary); font-size:0.8rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(preview)}</div>` : ''}
+        </div>
+      `;
+      if (np) row.onclick = () => showProfile(np);
+      wrap.appendChild(row);
+    });
+    feed.appendChild(wrap);
+  }
+
+  // Mentions
+  if (mentionNotes.length) {
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:12px 16px; font-size:0.8rem; color:var(--text-secondary); border-bottom:1px solid var(--border);';
+    header.textContent = 'Mentions';
+    feed.appendChild(header);
+    mentionNotes.forEach(ev => renderNote(ev, true));
+    hydrateNoteAuthors(mentionNotes);
+  }
+
+  if (!followList.length && !likeList.length && !mentionNotes.length) {
+    feed.innerHTML = '<div class="empty">No notifications yet.</div>';
+  }
 }
 
 // ========== BOOKMARKS ==========
@@ -1303,6 +1419,7 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
       </div>
       <div class="profile-name">${escapeHtml(name)}</div>
       <div class="profile-handle">${escapeHtml(handle)}</div>
+      ${joinedHtml}
       <div class="profile-counts">
         <span><strong>${followingCount}</strong> Following</span>
         <span><strong>${followerCount}</strong> Followers</span>
@@ -1314,7 +1431,6 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
         </button>
       </div>
       ${bio ? `<div class="profile-bio">${escapeWithLinks(bio)}</div>` : ''}
-      ${joinedHtml}
       ${extraHtml}
       <div id="editFormContainer"></div>
     </div>
@@ -1897,13 +2013,9 @@ function openScanner() {
   const video = document.getElementById('scannerVideo');
   modal.classList.add('active');
   if (statusEl) statusEl.textContent = 'Requesting camera…';
-
-  // Only override if the library hasn't already set it (UMD/ESM builds often
-  // ship an inline blob worker; overriding would break that).
   if (!QrScanner.WORKER_PATH) {
     QrScanner.WORKER_PATH = 'qr-scanner-worker.min.js';
   }
-
   try {
     scannerInstance = new QrScanner(
       video,
@@ -1912,8 +2024,10 @@ function openScanner() {
         if (!value) return;
         searchInput.value = value;
         searchInput.dispatchEvent(new Event('input'));
+        // Simulate pressing Enter so the search is triggered exactly as if the user typed and hit Enter.
+        const ev = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+        searchInput.dispatchEvent(ev);
         window.stopScanner();
-        performSearch(value.trim());
       },
       {
         returnDetailedScanResult: true,
@@ -2106,8 +2220,8 @@ function renderDohList() {
   const list = document.getElementById('dohList');
   if (!list) return;
   list.innerHTML = dohEndpoints.map((d, i) => `
-    <div class="dns-item">
-      <div class="dns-ip" style="font-family:monospace; flex:1;">${escapeHtml(d)}</div>
+    <div class="relay-item">
+      <input type="text" value="${escapeAttr(d)}" data-doh-index="${i}" class="doh-edit">
       <div class="relay-actions">
         <button class="secondary" style="padding:6px 10px;" data-move-doh="${i}" data-dir="-1">↑</button>
         <button class="secondary" style="padding:6px 10px;" data-move-doh="${i}" data-dir="1">↓</button>
@@ -2115,6 +2229,13 @@ function renderDohList() {
       </div>
     </div>
   `).join('');
+  list.querySelectorAll('.doh-edit').forEach(input => {
+    input.onchange = (e) => {
+      const idx = parseInt(e.target.dataset.dohIndex, 10);
+      dohEndpoints[idx] = e.target.value.trim();
+      saveDoh();
+    };
+  });
   list.querySelectorAll('[data-move-doh]').forEach(btn => {
     btn.onclick = () => moveDoh(parseInt(btn.dataset.moveDoh, 10), parseInt(btn.dataset.dir, 10));
   });
@@ -2135,9 +2256,11 @@ function renderDnsList() {
   const list = document.getElementById('dnsList');
   if (!list) return;
   list.innerHTML = dnsServers.map((s, i) => `
-    <div class="dns-item">
-      <div class="dns-ip">${escapeHtml(s.ip)}${s.local ? ' <span style="font-size:0.68rem; color:var(--accent);">(local)</span>' : ''}</div>
-      <div class="dns-label">${escapeHtml(s.label)}</div>
+    <div class="relay-item">
+      <div class="relay-body">
+        <div class="relay-ip">${escapeHtml(s.ip)}${s.local ? ' <span style="font-size:0.68rem; color:var(--accent);">(local)</span>' : ''}</div>
+        <div class="relay-label">${escapeHtml(s.label)}</div>
+      </div>
       <div class="relay-actions">
         <button class="secondary" style="padding:6px 10px;" data-move-dns="${i}" data-dir="-1">↑</button>
         <button class="secondary" style="padding:6px 10px;" data-move-dns="${i}" data-dir="1">↓</button>
@@ -2218,8 +2341,6 @@ function rebuildPasswordPanel() {
   document.getElementById('backFromPassword').onclick = () => { currentUser = null; showPanel(PANEL_OPTIONS); };
 }
 
-// Show login modal. If a stored encrypted key exists, jump straight to unlock;
-// otherwise show the options panel.
 function openLoginModal() {
   const hasStored = !!localStorage.getItem('cosanostr-encrypted-key');
   if (hasStored) { tryAutoUnlock(); return; }
@@ -2233,7 +2354,6 @@ function openLoginModal() {
 }
 
 async function tryAutoUnlock() {
-  // View-only session takes priority (no password involved).
   const viewOnly = localStorage.getItem('cosanostr-view-only');
   if (viewOnly) {
     try {
@@ -2300,8 +2420,12 @@ async function tryAutoUnlock() {
   }
   renderDots();
 
-  const doFocus = () => { try { input.focus({ preventScroll: true }); } catch (e) {} };
-  doFocus(); setTimeout(doFocus, 60); setTimeout(doFocus, 220);
+  // Only focus on desktop / non-touch devices — do not open the soft keyboard on mobile.
+  const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  const isMobileViewport = window.matchMedia('(max-width: 700px)').matches;
+  const shouldFocus = !(isTouch || isMobileViewport);
+  const doFocus = () => { if (!shouldFocus) return; try { input.focus({ preventScroll: true }); } catch (e) {} };
+  if (shouldFocus) { doFocus(); setTimeout(doFocus, 60); setTimeout(doFocus, 220); }
 
   input.addEventListener('input', renderDots);
   input.addEventListener('keydown', (e) => {
@@ -2317,6 +2441,8 @@ async function tryAutoUnlock() {
       else if (k === 'done') { unlockBtn.click(); return; }
       else input.value += k;
       renderDots();
+      // Do not auto-focus the hidden input on mobile (would pop the soft keyboard).
+      if (!shouldFocus) return;
       input.focus();
     });
   });
@@ -2350,7 +2476,7 @@ async function tryAutoUnlock() {
 
   showPanel(PANEL_UNLOCK);
   loginModal.classList.add('active');
-  setTimeout(doFocus, 320);
+  if (shouldFocus) setTimeout(doFocus, 320);
   return true;
 }
 
@@ -2450,7 +2576,6 @@ async function startNip07Login() {
   } catch (e) { alert('NIP-07 login failed: ' + e.message); }
 }
 
-// Always-present close button + backdrop + Esc, wired once.
 function setupModals() {
   const closeLogin = document.getElementById('closeLogin');
   if (closeLogin) closeLogin.onclick = () => loginModal.classList.remove('active');
@@ -2533,3 +2658,4 @@ window.copyToClipboard = copyToClipboard;
 window.openQR = openQR;
 window.showProfile = showProfile;
 window.openScanner = openScanner;
+window.renderExplore = renderExplore;
