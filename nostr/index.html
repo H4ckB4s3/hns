@@ -56,7 +56,7 @@
       <div class="header">
         <div class="search-bar">
           <div class="search-container">
-            <input type="text" class="search-input" id="searchInput" placeholder="npub, name@domain, or domain">
+            <input type="text" class="search-input" id="searchInput" placeholder="domain, npub or NIP-05">
             <button class="search-go" id="searchGoBtn" title="Go" aria-label="Search">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12h14M13 6l6 6-6 6"></path>
@@ -119,6 +119,40 @@
       </div>
       <video id="scannerVideo" style="width:100%; border-radius:12px; background:#000;" playsinline muted></video>
       <p id="scannerStatus" style="color:var(--text-secondary); font-size:0.85rem; margin-top:8px; text-align:center;">Starting camera…</p>
+    </div>
+  </div>
+
+  <div class="modal" id="filterModal">
+    <div class="modal-content" style="max-width:420px; padding:20px;">
+      <button class="modal-close" id="closeFilter" title="Close" aria-label="Close">✕</button>
+      <h3 style="margin-bottom:16px; font-size:1.2rem;">Explore filter</h3>
+      <div class="filter-section">
+        <label class="filter-toggle">
+          <input type="checkbox" id="filterEnableSpam"> Hide spam (default on)
+        </label>
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Hide notes containing keywords</div>
+        <input type="text" id="filterKeywords" placeholder="crypto, airdrop, …">
+      </div>
+      <div class="filter-section">
+        <div class="filter-label">Only show notes in these languages (ISO codes)</div>
+        <input type="text" id="filterLangs" placeholder="en, de, fr, …">
+      </div>
+      <div class="filter-section">
+        <label class="filter-toggle">
+          <input type="checkbox" id="filterHideCode"> Hide notes that look like code
+        </label>
+      </div>
+      <div class="filter-section">
+        <label class="filter-toggle">
+          <input type="checkbox" id="filterHideNoText"> Hide notes that are just links / images
+        </label>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button id="filterReset" class="secondary" style="flex:1;">Reset</button>
+        <button id="filterApply" style="flex:1;">Apply</button>
+      </div>
     </div>
   </div>
 
