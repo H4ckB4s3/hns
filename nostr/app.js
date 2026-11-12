@@ -1882,7 +1882,14 @@ function setupScannerModal() {
 }
 function openScanner() {
   if (typeof QrScanner === 'undefined') {
-    alert('QR scanner not available. Download qr-scanner.js and qr-scanner-worker.min.js.');
+    alert(
+      'QR scanner not loaded.\n\n' +
+      'Make sure qr-scanner.js is the UMD build (qr-scanner.umd.min.js) ' +
+      'loaded with a plain <script src="qr-scanner.js"></script>, ' +
+      'or that the ESM build is loaded as a module.\n\n' +
+      'Also make sure the app is served over http://localhost or https:// — ' +
+      'camera access is blocked on file:// .'
+    );
     return;
   }
   const modal = document.getElementById('scannerModal');
@@ -1890,8 +1897,14 @@ function openScanner() {
   const video = document.getElementById('scannerVideo');
   modal.classList.add('active');
   if (statusEl) statusEl.textContent = 'Requesting camera…';
+
+  // Only override if the library hasn't already set it (UMD/ESM builds often
+  // ship an inline blob worker; overriding would break that).
+  if (!QrScanner.WORKER_PATH) {
+    QrScanner.WORKER_PATH = 'qr-scanner-worker.min.js';
+  }
+
   try {
-    if (QrScanner.WORKER_PATH === undefined) QrScanner.WORKER_PATH = 'qr-scanner-worker.min.js';
     scannerInstance = new QrScanner(
       video,
       (result) => {
