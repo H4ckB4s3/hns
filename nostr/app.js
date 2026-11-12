@@ -34,6 +34,10 @@ let dohEndpoint = localStorage.getItem('cosanostr-doh') || DEFAULT_DOH;
 let theme = localStorage.getItem('cosanostr-theme') || 'dark';
 let profileCache = new Map();
 
+// Relay cooldown: URLs that recently failed are skipped briefly.
+const deadRelays = new Map();
+const DEAD_TTL_MS = 60 * 1000;
+
 const txtCache = new Map();
 const TXT_TTL_MS = 5 * 60 * 1000;
 
@@ -261,12 +265,11 @@ function npubFromNip05Entry(hit) {
 async function fetchWellKnownNames(host, dnsIp = null) {
   if (dnsIp && nip05ApiUrl) {
     try {
-      const resp = await fetch(`${nip05ApiUrl.replace(/\/$/, '')}/api/nip05/resolve`, {
+      await fetch(`${nip05ApiUrl.replace(/\/$/, '')}/api/nip05/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nip05: `_@${host}`, dns: dnsIp }) // dummy name, we need full names or specific
+        body: JSON.stringify({ nip05: `_@${host}`, dns: dnsIp })
       });
-      // Note: for full names map, better to have a dedicated fetch, but for now we resolve specific in resolveNip05
     } catch (e) {}
   }
   // Fallback direct (browser DNS)
@@ -516,42 +519,105 @@ async function importFollowingFromFile(file) {
 }
 
 // ========== RELAYS ==========
-function connectRelay(url, timeoutMs = 8000) {
+function connectRelay(url, timeoutMs = 4000) {
   return new Promise(resolve => {
     let settled = false;
     let ws;
-    try { ws = new WebSocket(url); } catch (e) { return resolve(null); }
+    try { ws = new WebSocket(url); } catch (e) {
+      deadRelays.set(url, Date.now() + DEAD_TTL_MS);
+      return resolve(null);
+    }
     const done = (ok) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (ok) {
+        deadRelays.delete(url);
+      } else {
+        deadRelays.set(url, Date.now() + DEAD_TTL_MS);
+      }
       resolve(ok ? ws : null);
     };
-    const timer = setTimeout(() => { try { ws.close(); } catch(e) {} done(false); }, timeoutMs);
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch (e) {}
+      done(false);
+    }, timeoutMs);
     ws.onopen = () => done(true);
     ws.onerror = () => done(false);
     ws.onclose = () => done(false);
-    ws.addEventListener('message', (e) => { try { handleRelayMessage(e.data); } catch (err) {} });
+    ws.addEventListener('message', (e) => {
+      try { handleRelayMessage(e.data); } catch (err) {}
+    });
   });
 }
 
 async function connectRelays() {
   if (relaysConnecting) return relaysConnecting;
+
   const promise = (async () => {
+    const now = Date.now();
+
     const liveUrls = new Set(
       sockets
         .filter(s => s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING)
         .map(s => s.url)
     );
-    const toOpen = relays.filter(u => !liveUrls.has(u));
-    if (toOpen.length) {
-      const opened = await Promise.all(toOpen.map(u => connectRelay(u)));
-      sockets = sockets.concat(opened.filter(Boolean));
+
+    const candidates = relays.filter(u => {
+      if (liveUrls.has(u)) return false;
+      const until = deadRelays.get(u);
+      if (until && until > now) return false;
+      return true;
+    });
+
+    if (!candidates.length) {
+      updateRelayStatus();
+      return sockets.filter(s => s.readyState === WebSocket.OPEN).length;
     }
-    sockets = sockets.filter(s => s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING);
+
+    // Fire all connections in parallel and return as soon as ONE opens.
+    await new Promise(resolve => {
+      let remaining = candidates.length;
+      let anyOpen = false;
+      let done = false;
+
+      const maybeFinish = () => {
+        if (done) return;
+        if (anyOpen || remaining <= 0) {
+          done = true;
+          resolve();
+        }
+      };
+
+      candidates.forEach(url => {
+        connectRelay(url).then(ws => {
+          if (ws) {
+            sockets.push(ws);
+            anyOpen = true;
+          }
+          remaining--;
+          maybeFinish();
+        }).catch(() => {
+          remaining--;
+          maybeFinish();
+        });
+      });
+
+      // Safety net so we never block longer than the per-relay timeout.
+      setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve();
+      }, 4500);
+    });
+
+    sockets = sockets.filter(s =>
+      s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING
+    );
     updateRelayStatus();
     return sockets.filter(s => s.readyState === WebSocket.OPEN).length;
   })();
+
   relaysConnecting = promise;
   try { return await promise; }
   finally { if (relaysConnecting === promise) relaysConnecting = null; }
@@ -990,52 +1056,73 @@ async function showProfile(identifier, domain = null, nip05 = null) {
   const cachedMeta = profileCache.get(hex) || {};
   renderProfileContent(npub, domain, cachedMeta, nip05, { skeleton: true });
 
-  const openBefore = sockets.filter(s => s.readyState === WebSocket.OPEN).length;
-  if (openBefore < Math.max(1, Math.ceil(relays.length / 2))) {
-    await connectRelays();
-  }
-
+  // Kick off all three queries in parallel — do NOT await them one at a time.
   const metaPromise = queryRelays({ authors: [hex], kinds: [0], limit: 1 });
   const postsPromise = queryRelays({ authors: [hex], kinds: [1], limit: 100 });
   const txtPromise = (domain && !domain.includes('@'))
     ? fetchTXTRecords(domain)
     : Promise.resolve(null);
 
-  // Only re-render on meta arrival (before posts, keeps skeleton → real look).
-  // Do NOT re-render on txt arrival — the final render below already includes records.
-  metaPromise.then((metaEvents) => {
-    if (window.currentProfileHex !== hex) return;
-    if (!metaEvents.length) return;
-    metaEvents.sort((a, b) => b.created_at - a.created_at);
+  // --- Header render: meta + TXT together, independent of posts ---
+  (async () => {
+    let meta = cachedMeta;
+    let records = null;
     try {
-      const meta = JSON.parse(metaEvents[0].content);
-      profileCache.set(hex, meta);
-      renderProfileContent(npub, domain, meta, nip05);
+      const [metaEvents, txtRecords] = await Promise.all([metaPromise, txtPromise]);
+      if (window.currentProfileHex !== hex) return;
+
+      if (metaEvents && metaEvents.length) {
+        metaEvents.sort((a, b) => b.created_at - a.created_at);
+        try {
+          meta = JSON.parse(metaEvents[0].content);
+          profileCache.set(hex, meta);
+        } catch (e) {}
+      }
+
+      if (txtRecords) {
+        window.currentProfileRecords = txtRecords;
+        records = txtRecords;
+      }
+    } catch (e) {
+      if (window.currentProfileHex !== hex) return;
+    }
+
+    // Re-render the profile header only. Do not touch #feed.
+    renderProfileContent(npub, domain, meta, nip05, { headerOnly: true, skipPosts: true });
+  })();
+
+  // --- Posts render: independent, arrives later ---
+  (async () => {
+    let postEvents = [];
+    try {
+      postEvents = await postsPromise;
     } catch (e) {}
-  });
 
-  let postEvents = await postsPromise;
-  if (postEvents.length === 0 && openBefore < Math.max(1, Math.ceil(relays.length / 2))) {
-    await connectRelays();
-    postEvents = await queryRelays({ authors: [hex], kinds: [1], limit: 100 });
-  }
+    if (window.currentProfileHex !== hex) return;
 
-  const seen = new Set();
-  const deduped = [];
-  for (const ev of profilePosts) { if (seen.has(ev.id)) continue; seen.add(ev.id); deduped.push(ev); }
-  for (const ev of postEvents) { if (seen.has(ev.id)) continue; seen.add(ev.id); deduped.push(ev); }
-  deduped.sort((a, b) => b.created_at - a.created_at);
-  profilePosts = deduped;
+    // If we got nothing, and few relays are open, retry once.
+    if (postEvents.length === 0) {
+      const openNow = sockets.filter(s => s.readyState === WebSocket.OPEN).length;
+      if (openNow < Math.max(1, Math.ceil(relays.length / 2))) {
+        await connectRelays();
+        try {
+          postEvents = await queryRelays({ authors: [hex], kinds: [1], limit: 100 });
+        } catch (e) {}
+      }
+    }
 
-  if (window.currentProfileHex !== hex) return;
+    if (window.currentProfileHex !== hex) return;
 
-  // Wait for TXT records so the final render includes socials/wallets + posts together.
-  const txtRecords = await txtPromise;
-  if (txtRecords) window.currentProfileRecords = txtRecords;
+    const seen = new Set();
+    const deduped = [];
+    for (const ev of profilePosts) { if (seen.has(ev.id)) continue; seen.add(ev.id); deduped.push(ev); }
+    for (const ev of postEvents) { if (seen.has(ev.id)) continue; seen.add(ev.id); deduped.push(ev); }
+    deduped.sort((a, b) => b.created_at - a.created_at);
+    profilePosts = deduped;
 
-  // Preserve any meta that arrived in the meantime.
-  const meta = profileCache.get(hex) || cachedMeta || {};
-  renderProfileContent(npub, domain, meta, nip05);
+    // Render posts into the existing #feed without rebuilding the header.
+    renderProfileContent(npub, domain, profileCache.get(hex) || cachedMeta || {}, nip05, { headerOnly: true, skipPosts: false });
+  })();
 }
 
 function shortenNpub(npub) {
@@ -1118,10 +1205,9 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
 
   const npubDisplay = shortenNpub(npub);
 
-  content.innerHTML = `
+  const headerHtml = `
     <div class="profile-header">
       <div class="profile-cover" style="${coverStyle}"></div>
-
       <div class="profile-top-row">
         <div class="profile-avatar-large">${pic ? `<img src="${escapeHtml(pic)}" onerror="this.parentElement.innerHTML='⚡'">` : '⚡'}</div>
         <div class="profile-top-actions">
@@ -1129,7 +1215,6 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
           ${editBtnHtml}
         </div>
       </div>
-
       <div class="profile-name">${escapeHtml(name)}</div>
       <div class="profile-handle">${escapeHtml(handle)}</div>
       <div class="npub-row">
@@ -1142,8 +1227,65 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
       ${extraHtml}
       <div id="editFormContainer"></div>
     </div>
-    <div id="feed"></div>
   `;
+
+  // --- headerOnly: swap only the profile header, leave #feed untouched ---
+  if (opts.headerOnly) {
+    const existing = content.querySelector('.profile-header');
+    if (existing) {
+      const temp = document.createElement('div');
+      temp.innerHTML = headerHtml;
+      existing.replaceWith(temp.firstElementChild);
+    } else {
+      // No header yet (first render) — build it, then append a fresh #feed.
+      content.innerHTML = headerHtml + '<div id="feed"></div>';
+    }
+
+    // Re-bind header-only handlers
+    const followBtnEl = document.getElementById('followBtn');
+    if (followBtnEl) {
+      followBtnEl.onclick = (e) => {
+        e.stopPropagation();
+        if (isFollowing(String(npub).toLowerCase())) removeFollow(npub);
+        else addFollow({ npub, domain, nip05 });
+        renderProfileContent(npub, domain, meta, nip05, { headerOnly: true, skipPosts: true });
+      };
+    }
+    if (isOwn && document.getElementById('editProfileBtn')) {
+      document.getElementById('editProfileBtn').onclick = () => showEditForm(meta);
+    }
+
+    // If we're asked to render posts into the existing #feed, do that.
+    if (!opts.skipPosts) {
+      const feed = document.getElementById('feed');
+      if (feed) {
+        feed.innerHTML = '';
+        const ownPosts = profilePosts.filter(p => p.pubkey === window.currentProfileHex);
+        if (ownPosts.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = 'No notes found.';
+          feed.appendChild(empty);
+        } else {
+          ownPosts.forEach(ev => renderNote(ev, true));
+        }
+      }
+    }
+
+    if (pendingFocusNoteId) {
+      const target = document.querySelector(`.note[data-id="${pendingFocusNoteId}"]`);
+      if (target) {
+        target.classList.add('note-focused');
+        try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+        setTimeout(() => { if (target) target.classList.remove('note-focused'); }, 2200);
+        pendingFocusNoteId = null;
+      }
+    }
+    return;
+  }
+
+  // --- Full render (initial mount) ---
+  content.innerHTML = headerHtml + '<div id="feed"></div>';
 
   bindNostrLinks(content);
 
@@ -1151,11 +1293,8 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
   if (followBtnEl) {
     followBtnEl.onclick = (e) => {
       e.stopPropagation();
-      if (isFollowing(String(npub).toLowerCase())) {
-        removeFollow(npub);
-      } else {
-        addFollow({ npub, domain, nip05 });
-      }
+      if (isFollowing(String(npub).toLowerCase())) removeFollow(npub);
+      else addFollow({ npub, domain, nip05 });
       renderProfileContent(npub, domain, meta, nip05);
     };
   }
@@ -1163,16 +1302,14 @@ function renderProfileContent(npub, domain, meta, nip05, opts = {}) {
   const feed = document.getElementById('feed');
   if (feed) {
     const ownPosts = profilePosts.filter(p => p.pubkey === window.currentProfileHex);
-
     if (opts.skeleton) {
       const loader = document.createElement('div');
       loader.className = 'loader';
       loader.textContent = 'Loading notes...';
       feed.appendChild(loader);
     } else if (opts.skipPosts) {
-      if (ownPosts.length) {
-        ownPosts.forEach(ev => renderNote(ev, true));
-      } else {
+      if (ownPosts.length) ownPosts.forEach(ev => renderNote(ev, true));
+      else {
         const loader = document.createElement('div');
         loader.className = 'loader';
         loader.textContent = 'Loading notes...';
